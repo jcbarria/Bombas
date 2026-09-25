@@ -4,19 +4,6 @@ EFICIENCIA DE BOMBAS - APP INSTALABLE PARA ANDROID (funciona sin conexión)
 Contenido de esta carpeta (suba TODOS los archivos, sin cambiar los nombres):
   index.html, manifest.webmanifest, sw.js, icon-192.png, icon-512.png, icon-maskable-512.png
 
-PARTE 1 - Publicar la app (una sola vez, con internet, gratis)
---------------------------------------------------------------
-Opción A: GitHub Pages
-  1. Cree una cuenta gratuita en github.com.
-  2. New repository. Nombre: bombas. Público (Public). Create repository.
-  3. Enlace "uploading an existing file". Arrastre los 6 archivos. Commit changes.
-  4. Settings > Pages > Source: "Deploy from a branch" > Branch: main / (root) > Save.
-  5. Espere 1-2 minutos. La app queda en:  https://SU-USUARIO.github.io/bombas/
-
-Opción B: Netlify Drop (arrastrar y soltar)
-  1. Entre a app.netlify.com/drop (puede pedir crear una cuenta gratuita).
-  2. Arrastre esta carpeta completa. Le dará una dirección https://...netlify.app
-
 El repositorio o sitio contiene solo la app. Los datos que su padre ingrese NUNCA se suben:
 se guardan únicamente en su teléfono.
 
