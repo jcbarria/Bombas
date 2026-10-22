@@ -324,8 +324,136 @@ function parallelCurve(curves){
   return out.length>=2 ? out : null;
 }
 
+/* ===================== Sistemas de 2 o más bombas ===================== */
+// Arreglos: 'single' (una bomba), 'parallel', 'series', 'mixed' (trenes en paralelo, cada tren con bombas en serie).
+// Potencia hidráulica con caudal en m³/h y ΔP en bar: Ph [kW] = Q · ΔP / 36.
+// La app calcula Ph = ρ·g·Q·H con la H completa (incluye Δz y alturas de velocidad);
+// coincide con Q·ΔP/36 cuando Δz = 0 y los diámetros de aspiración e impulsión son iguales.
+function hydKW(Q, dP){ return Q*dP/36; }
+
+function sysTrainOf(S, k){
+  if(S.arr==='parallel') return k;
+  if(S.arr==='series') return 0;
+  var t=S.sys.pumps[k] && S.sys.pumps[k].train;
+  return t>=0 ? Math.floor(t) : 0;
+}
+// Vista de una bomba con la forma del estado individual, para reutilizar calcPoint y vibEval.
+function sysView(S, P){
+  return { meta:{ tag:P.tag }, pump:P.pump, inst:P.inst, points:P.points,
+    fluid:S.fluid, units:S.units, mode:S.mode, unc:S.unc, econ:S.econ };
+}
+function spread(vals){
+  var mx=Math.max.apply(null,vals), mn=Math.min.apply(null,vals), m=vals.reduce(function(a,b){ return a+b; },0)/vals.length;
+  return Math.abs(m)>1e-9 ? (mx-mn)/Math.abs(m) : 0;
+}
+
+// ESTIMACIÓN (paralelo con solo el caudal total): cada bomba aporta en proporción al caudal
+// que indica su curva H–Q a la altura medida con sus presiones. Requiere la curva de todas las bombas.
+function sysSplit(S, j){
+  var pumps=S.sys.pumps, p0=pumps[0].points[j]||{}, Qt=p0.Qtot, rho=S.fluid.rho, qc=[], miss=[];
+  if(!(Qt>0)) return { error:'Ingrese el caudal total del grupo para estimar el reparto.' };
+  pumps.forEach(function(P,k){
+    var p=P.points[j]||{}, tag=P.tag||('P-'+(k+1));
+    if(p.Ps===null||p.Ps===undefined||p.Pd===null||p.Pd===undefined||!(rho>0)){ miss.push(tag); qc.push(null); return; }
+    var H=(p.Pd-p.Ps)*1e5/(rho*G)+(P.inst.dz||0);
+    var q=curveQatH(P.pump.curve, H);
+    if(q===null||!(q>0)) miss.push(tag);
+    qc.push(q);
+  });
+  if(miss.length) return { error:'Para estimar el reparto se necesitan Ps, Pd y una curva H–Q que cubra la altura medida en: '+miss.join(', ')+'.' };
+  var sum=qc.reduce(function(a,b){ return a+b; },0);
+  return { Q:qc.map(function(q){ return Qt*q/sum; }), Qtot:Qt };
+}
+
+function sysCalc(S, j){
+  var pumps=S.sys.pumps, out={ pumps:[], trains:[], warns:[], errors:[], complete:false, ok:false, est:false };
+  var split=null;
+  if(S.arr==='parallel' && S.sys.qMode==='total'){
+    split=sysSplit(S,j); out.est=true;
+    if(split.error){ out.errors.push(split.error); split=null; }
+  }
+  pumps.forEach(function(P,k){
+    var V=sysView(S,P), p=P.points[j]||null, tag=P.tag||('P-'+(k+1));
+    if(p && split){ var c={}, key; for(key in p) c[key]=p[key]; c.Q=split.Q[k]; p=c; }
+    if(p && out.est && !split){ var c2={}, key2; for(key2 in p) c2[key2]=p[key2]; c2.Q=null; p=c2; }
+    var r = p ? calcPoint(V,p) : { ok:false, missing:['Q','Ps','Pd'], warns:[] };
+    var dP = (p && p.Pd!==null && p.Pd!==undefined && p.Ps!==null && p.Ps!==undefined) ? p.Pd-p.Ps : null;
+    if(dP!==null && !(dP>0)){
+      r.ok=false; r.error='La presión de descarga es menor o igual que la de succión (ΔP ≤ 0): revise Ps y Pd.';
+    }
+    var e={ k:k, tag:tag, train:sysTrainOf(S,k), r:r, p:p, dP:dP, est:!!split, vib:p?vibEval(V,p):null };
+    if(r.ok && r.invalid) out.errors.push(tag+': η > 100 %. Revise los datos de caudal, presiones y potencia.');
+    if(r.ok && r.qr!==undefined && (r.qr<BEP_MIN || r.qr>BEP_MAX))
+      out.warns.push({ k:r.qr<0.5?'bad':'warn', t:tag+' opera al '+fmtN(r.qr*100,0)+' % de su caudal de mejor eficiencia (fuera de '+fmtN(BEP_MIN*100,0)+'–'+fmtN(BEP_MAX*100,0)+' %).' });
+    out.pumps.push(e);
+  });
+  var bad=out.pumps.filter(function(e){ return !e.r.ok; });
+  bad.forEach(function(e){ if(e.r.error) out.errors.push(e.tag+': '+e.r.error); });
+  out.incomplete=bad.map(function(e){ return e.tag; });
+  if(bad.length) return out;
+  out.complete=true;
+
+  // Trenes (en paralelo entre sí); dentro de cada tren las bombas están en serie
+  var ids=[];
+  out.pumps.forEach(function(e){ if(ids.indexOf(e.train)<0) ids.push(e.train); });
+  ids.sort(function(a,b){ return a-b; });
+  out.trains=ids.map(function(t){
+    var m=out.pumps.filter(function(e){ return e.train===t; });
+    var qs=m.map(function(e){ return e.r.Q; });
+    var tr={ id:t, members:m.map(function(e){ return e.k; }),
+      Q:qs.reduce(function(a,b){ return a+b; },0)/qs.length,
+      dP:m.reduce(function(a,e){ return a+e.dP; },0),
+      H:m.reduce(function(a,e){ return a+e.r.H; },0),
+      Pd:m[m.length-1].p.Pd, Ps:m[0].p.Ps };
+    if(m.length>1){
+      tr.qSpread=spread(qs);
+      if(tr.qSpread>SYS_Q_DIFF) out.warns.push({ k:'warn', t:'En serie el caudal es común, pero los medidos en '+m.map(function(e){ return e.tag; }).join(', ')+' difieren '+fmtN(tr.qSpread*100,1)+' %: revise el caudalímetro o fugas entre bombas.' });
+    }
+    return tr;
+  });
+  if(out.trains.length>1){
+    out.pdSpread=spread(out.trains.map(function(t){ return t.Pd; }));
+    if(out.pdSpread>SYS_PD_DIFF) out.warns.push({ k:'warn', t:'En paralelo las presiones de descarga difieren '+fmtN(out.pdSpread*100,1)+' % entre bombas: verifique manómetros y válvulas de retención.' });
+  }
+
+  var sum=function(key){ return out.pumps.reduce(function(a,e){ return a+e.r[key]; },0); };
+  var g={ Q:out.trains.reduce(function(a,t){ return a+t.Q; },0), Ph:sum('Ph'), Pe:sum('Pe'), Peje:sum('Peje') };
+  g.eta=g.Ph/g.Peje*100;          // grupo: Σ potencia hidráulica / Σ potencia al eje
+  g.etaG=g.Ph/g.Pe*100;           // grupo, desde la red: Σ hidráulica / Σ eléctrica
+  g.Eesp=g.Pe/g.Q;                // kWh/m³ (potencia eléctrica total / caudal del grupo)
+  g.EespBbl=g.Eesp*BBL;
+  g.dP = out.trains.length===1 ? out.trains[0].dP : null;
+  g.H = out.trains.reduce(function(a,t){ return a+t.H; },0)/out.trains.length;
+  // Referencia del grupo (ponderada por potencia) cuando todas las bombas tienen curva o BEP
+  if(out.pumps.every(function(e){ return e.r.ref>0; }))
+    g.ref = g.Ph/out.pumps.reduce(function(a,e){ return a+e.r.Ph/(e.r.ref/100); },0)*100;
+  var hours=S.econ&&S.econ.hours, price=S.econ&&S.econ.price;
+  if(hours>0){ g.kwhYear=g.Pe*hours; if(price>0) g.costYear=g.kwhYear*price; }
+  if(g.eta>100){ g.invalid=true; out.errors.push('η del grupo > 100 %: revise los datos.'); }
+  out.g=g;
+  out.ok=!g.invalid && !out.pumps.some(function(e){ return e.r.invalid; });
+  return out;
+}
+
+// Curvas H–Q para el gráfico del sistema: las individuales y la combinada según el arreglo.
+function sysCurves(S){
+  var pumps=S.sys.pumps;
+  var indiv=pumps.map(function(P){ return rowsToPts(curveRows(P.pump.curve,'H')); });
+  var ids=[];
+  pumps.forEach(function(P,k){ var t=sysTrainOf(S,k); if(ids.indexOf(t)<0) ids.push(t); });
+  var trainCurves=ids.map(function(t){
+    var cs=pumps.filter(function(P,k){ return sysTrainOf(S,k)===t; }).map(function(P){ return P.pump.curve; });
+    if(cs.length>1) return seriesCurve(cs);
+    var r=curveRows(cs[0],'H'); return r.length>=2 ? rowsToPts(r) : null;
+  });
+  var comb=null;
+  if(trainCurves.every(Boolean)) comb = trainCurves.length===1 ? (pumps.length>1 ? trainCurves[0] : null) : parallelCurve(trainCurves);
+  return { indiv:indiv, comb:comb };
+}
+
 if(typeof module!=='undefined' && module.exports){
   module.exports = { G:G, BBL:BBL, UNITS:UNITS, toSI:toSI, fromSI:fromSI, num:num, viscCorr:viscCorr, calcPoint:calcPoint, calcAll:calcAll,
     savings:savings, waterProps:waterProps, vibEval:vibEval, curveAt:curveAt, curveQatH:curveQatH, seriesCurve:seriesCurve,
-    parallelCurve:parallelCurve, BEP_MIN:BEP_MIN, BEP_MAX:BEP_MAX, setNumberFormatter:setNumberFormatter };
+    parallelCurve:parallelCurve, hydKW:hydKW, sysCalc:sysCalc, sysSplit:sysSplit, sysCurves:sysCurves, sysView:sysView, sysTrainOf:sysTrainOf,
+    BEP_MIN:BEP_MIN, BEP_MAX:BEP_MAX, SYS_Q_DIFF:SYS_Q_DIFF, SYS_PD_DIFF:SYS_PD_DIFF, setNumberFormatter:setNumberFormatter };
 }
