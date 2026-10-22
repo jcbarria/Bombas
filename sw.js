@@ -1,6 +1,12 @@
-// Versión: cambie este número cuando publique una nueva versión de index.html
-const CACHE = 'bombas-v3';
-const ASSETS = ['./', 'index.html', 'manifest.webmanifest', 'icon-192.png', 'icon-512.png', 'icon-maskable-512.png'];
+// Versión: cambie este número en cada publicación para que los teléfonos que ya instalaron la app reciban la nueva.
+const CACHE = 'bombas-v4';
+const ASSETS = [
+  './', 'index.html', 'styles.css', 'core.js', 'i18n.js', 'app.js', 'manifest.webmanifest',
+  'icon-192.png', 'icon-512.png', 'icon-maskable-512.png',
+  'fonts/ibm-plex-sans-latin-400-normal.woff2', 'fonts/ibm-plex-sans-latin-500-normal.woff2',
+  'fonts/ibm-plex-sans-latin-600-normal.woff2', 'fonts/ibm-plex-sans-latin-700-normal.woff2',
+  'fonts/ibm-plex-mono-latin-500-normal.woff2', 'fonts/ibm-plex-mono-latin-600-normal.woff2'
+];
 self.addEventListener('install', (e) => {
   e.waitUntil(caches.open(CACHE).then((c) => c.addAll(ASSETS)).then(() => self.skipWaiting()));
 });
@@ -15,7 +21,7 @@ self.addEventListener('fetch', (e) => {
       const net = fetch(req).then((res) => {
         if (res && res.ok) { const copy = res.clone(); caches.open(CACHE).then((c) => c.put(req, copy)); }
         return res;
-      }).catch(() => hit || caches.match('index.html'));
+      }).catch(() => hit || (req.mode === 'navigate' ? caches.match('index.html') : Response.error()));
       return hit || net;   // primero lo guardado (rápido y sin señal); actualiza en segundo plano
     })
   );
