@@ -34,7 +34,10 @@ function defaultState(){
     unc:{ Q:2, P:0.5, FS:10, W:1, rho:0.5, etaM:1.5 },
     econ:{ price:null, hours:8000 },
     checks:{},
-    demo:false
+    demo:false,
+    arr:'single',                                   // single | parallel | series | mixed
+    sys:{ pumps:[], active:0, qMode:'each' },       // bombas del sistema; la activa se edita en pump/inst/points
+    single:null                                     // bomba individual guardada mientras se usa un sistema
   };
 }
 function merge(base, src){
@@ -57,7 +60,7 @@ function normalize(s){
 store.ok = true;
 try{ localStorage.setItem('ebp:t','1'); localStorage.removeItem('ebp:t'); }catch(e){ store.ok = false; }
 var S = normalize(merge(defaultState(), store.get('ebp:state') || {}));
-var ui = { tab:'measure', sub:null, pt:0, sel:0, q:'', htag:null };
+var ui = { tab:'measure', sub:null, pt:0, sel:0, q:'', htag:null, pre:{} };
 var DL = null;   // capacidad «downloads», si el visor la concede
 
 var saveT;
@@ -206,17 +209,13 @@ function vMeasure(){
   h+='<button type="button" class="btn primary" data-act="calc">'+L3('Calcular eficiencia','Calculate efficiency','Calcular eficiência')+'</button>';
   return { hd:{ title:L3('Medir','Measure','Medir'), sub:measureSub() }, body:h };
 }
-function measureSub(){ return subLine(); }
-function curTag(){ return S.meta.tag; }
-function sysTopHTML(){ return ''; }
-function prefillHint(){ return ''; }
 
 function pointCard(i){
   var p=S.points[i], b='points.'+i+'.', h='';
   h+='<section class="card r18" id="pt-'+i+'"><h3><span>'+L3('Lecturas','Readings','Leituras')+'</span><span id="pc-'+i+'"></span></h3>';
   h+='<div style="margin-bottom:14px">'+seg('mode', S.mode, [['vi','V · I · cos φ'],['kw',L3('kW directos','Direct kW','kW diretos')]], L3('Cómo mide la potencia eléctrica','How electrical power is measured','Como mede a potência elétrica'))+'</div>';
   h+='<div class="fgrid">';
-  h+=F('Q caudal',b+'Q','Q',{cls:'span2',hint:prefillHint(i,'Q'),hintCls:'pre'});
+  h+=qFieldHTML(i);
   h+=F('Ps aspiración',b+'Ps','P',{neg:true,hint:prefillHint(i,'Ps'),hintCls:'pre'})+F('Pd impulsión',b+'Pd','P',{hint:prefillHint(i,'Pd'),hintCls:'pre'});
   if(S.mode==='vi') h+=F('V tensión de línea',b+'V','num',{suf:'V'})+F('I corriente',b+'I','num',{suf:'A'})+F('cos φ',b+'cos','num',{suf:'',ph:fmtIn(0.85)});
   else h+=F('P eléctrica (kW medidos)',b+'kW','num',{suf:'kW'});
@@ -283,7 +282,6 @@ function vEquip(){
   h+='<button type="button" class="btn primary" data-act="back" data-v="measure">'+L3('Listo','Done','Pronto')+'</button>';
   return { hd:{ title:L3('Equipo','Equipment','Equipamento'), sub:subLine(), back:'measure' }, body:h };
 }
-function equipTagFields(){ return F('Equipo / TAG','meta.tag','txt',{ph:'P-101A',cls:'span2'}); }
 
 function curveCardHTML(){
   var rows=S.pump.curve||[], h='<section class="card" id="curveCard"><h3><span>'+L3('Curva del fabricante','Manufacturer curve','Curva do fabricante')+'</span><small>'+L3('opcional · agua','optional · water','opcional · água')+'</small></h3>';
@@ -639,8 +637,6 @@ function vResult(){
   }
   return { hd:hd, body:h };
 }
-function isSys(){ return false; }
-function vSysResult(){ return { hd:{ title:'' }, body:'' }; }
 
 /* ===================== HISTORIAL ===================== */
 function histLoad(){ return store.get('ebp:hist')||[]; }
@@ -668,7 +664,6 @@ function histListHTML(){
       '<button type="button" class="hdel" data-act="hdel" data-id="'+e.id+'" aria-label="'+L3('Eliminar ','Delete ','Excluir ')+esc(e.tag||'')+' '+fmtDate(e.fecha)+'">'+ico('trash')+'</button></div>';
   }).join('')+'</div>';
 }
-function histArrTxt(e){ return ''; }
 function trendTag(){
   if(ui.htag!==null) return ui.htag;
   var h=histLoad(); return h.length ? (h[0].tag||'') : null;   // por defecto, el equipo de la última evaluación
@@ -747,11 +742,339 @@ function vSettings(){
      'Se ofrece de forma gratuita, para uso personal, «tal cual», sin garantía de exactitud ni de idoneidad para un fin particular. El autor no es responsable de daños, pérdidas o decisiones tomadas a partir de sus resultados.'].map(function(t){ return '<li>'+t+'</li>'; }).join('')+'</ul></div></details>';
   h+='<section class="card"><h3>'+L3('Datos','Data','Dados')+'</h3>'+(store.ok?'':'<div class="note warn" style="margin:0 0 10px"><b>Sin almacenamiento.</b> Este navegador no permite guardar datos: lo que ingrese se pierde al cerrar. Use «Copiar resumen» o descargue el CSV antes de salir.</div>')+
     '<button type="button" class="btn blue block" data-act="install" id="btnInstall" hidden style="margin-bottom:10px">Instalar en el teléfono</button>'+
-    '<button type="button" class="btn block" data-act="demo" style="margin-bottom:10px">'+L3('Cargar datos de ejemplo','Load example data','Carregar dados de exemplo')+'</button>'+
+    '<div class="btnrow" style="margin-bottom:10px"><button type="button" class="btn" data-act="demo">'+L3('Ejemplo: una bomba','Example: one pump','Exemplo: uma bomba')+'</button><button type="button" class="btn" data-act="demoSys">'+L3('Ejemplo: 2 en paralelo','Example: 2 in parallel','Exemplo: 2 em paralelo')+'</button></div>'+
     '<div class="btnrow"><button type="button" class="btn" data-act="newEval">Nueva evaluación</button><button type="button" class="btn danger" data-act="wipe">Borrar todo</button></div></section>';
   return { hd:{ title:L3('Ajustes','Settings','Ajustes'), sub:L3('Idioma, unidades, guía y datos','Language, units, guide and data','Idioma, unidades, guia e dados') }, body:h };
 }
-function sysFormulasHTML(){ return ''; }
+
+/* ===================== SISTEMAS DE VARIAS BOMBAS ===================== */
+// La bomba que se está editando vive en S.pump / S.inst / S.points (los mismos objetos que
+// S.sys.pumps[activa]), así el formulario y los cálculos de la bomba individual se reutilizan tal cual.
+var ARR = { single:['Individual','Single','Individual'], parallel:['Paralelo','Parallel','Paralelo'], series:['Serie','Series','Série'], mixed:['Mixto','Mixed','Misto'] };
+function arrName(a){ var t=ARR[a]||ARR.single; return L3(t[0],t[1],t[2]); }
+function isSys(){ return !!(S.arr && S.arr!=='single' && S.sys && S.sys.pumps && S.sys.pumps.length>=SYS_MIN_PUMPS); }
+function pumpLabel(k){ return 'P-'+(k+1); }
+function newPumpEntry(k, npts, train){
+  var pts=[]; for(var j=0;j<npts;j++) pts.push(newPoint());
+  return { tag:pumpLabel(k), train:train||0, pump:newPump(), inst:newInst(), points:pts };
+}
+function syncActive(){ if(!isSys()) return; var P=S.sys.pumps[S.sys.active]; P.pump=S.pump; P.inst=S.inst; P.points=S.points; }
+function bindActive(){ var P=S.sys.pumps[S.sys.active]; S.pump=P.pump; S.inst=P.inst; S.points=P.points; }
+function normSys(s){
+  s.sys = merge({ pumps:[], active:0, qMode:'each' }, s.sys);
+  var n=0;
+  s.sys.pumps = (s.sys.pumps||[]).map(function(P,k){
+    var e={ tag:P.tag||pumpLabel(k), train:P.train>=0?P.train:0, pump:merge(newPump(),P.pump), inst:merge(newInst(),P.inst), points:normPoints(P.points) };
+    n=Math.max(n,e.points.length); return e;
+  });
+  s.sys.pumps.forEach(function(P){ while(P.points.length<n) P.points.push(newPoint()); });
+  if(!(s.sys.active>=0 && s.sys.active<s.sys.pumps.length)) s.sys.active=0;
+  if(s.single){ s.single={ pump:merge(newPump(),s.single.pump), inst:merge(newInst(),s.single.inst), points:normPoints(s.single.points) }; }
+  if(['single','parallel','series','mixed'].indexOf(s.arr)<0) s.arr='single';
+  return s;
+}
+function afterLoad(){ S=normSys(S); if(isSys()) bindActive(); else if(S.arr!=='single') S.arr='single'; }
+function setArr(a){
+  if(a===S.arr) return;
+  if(a==='single'){
+    syncActive();
+    if(S.single){ S.pump=S.single.pump; S.inst=S.single.inst; S.points=S.single.points; }
+    S.arr='single'; ui.pt=Math.min(ui.pt,S.points.length-1); return;
+  }
+  if(!isSys()){
+    S.single={ pump:S.pump, inst:S.inst, points:S.points };
+    if(S.sys.pumps.length<SYS_MIN_PUMPS){
+      S.sys.pumps=[{ tag:pumpLabel(0), train:0, pump:clone(S.pump), inst:clone(S.inst), points:clone(S.points) }, newPumpEntry(1, S.points.length, a==='mixed'?1:0)];
+      S.sys.active=0;
+    }
+  } else syncActive();
+  // Al pasar a mixto con todas las bombas en el mismo tren, cada una arranca en su propio tren
+  if(a==='mixed' && S.sys.pumps.every(function(P){ return (P.train||0)===(S.sys.pumps[0].train||0); }))
+    S.sys.pumps.forEach(function(P,k){ P.train=k; });
+  S.arr=a; bindActive(); ui.pt=Math.min(ui.pt,S.points.length-1); prefill(S.sys.active);
+}
+function setActive(k){ syncActive(); S.sys.active=k; bindActive(); prefill(k); }
+function prevInTrain(k){
+  var t=sysTrainOf(S,k);
+  for(var i=k-1;i>=0;i--) if(sysTrainOf(S,i)===t) return i;
+  return -1;
+}
+// Precarga de datos editables. Serie: succión = descarga de la bomba anterior del tren, y el caudal común.
+// Paralelo: descarga = la de P-1. Solo completa campos vacíos o que siguen precargados.
+function prefill(k){
+  if(!isSys()) return;
+  var P=S.sys.pumps[k];
+  function put(j,key,val,from){
+    var id=k+'.'+j+'.'+key, p=P.points[j];
+    if(val===null||val===undefined) return;
+    if(p[key]===null||p[key]===undefined||ui.pre[id]){ p[key]=val; ui.pre[id]=from; }
+  }
+  P.points.forEach(function(p,j){
+    if(S.arr==='series'||S.arr==='mixed'){
+      var i=prevInTrain(k);
+      if(i>=0){ var q=S.sys.pumps[i].points[j]; put(j,'Ps',q.Pd,['Ps',S.sys.pumps[i].tag]); put(j,'Q',q.Q,['Q',S.sys.pumps[i].tag]); }
+    }
+    if(S.arr==='parallel' && k>0) put(j,'Pd',S.sys.pumps[0].points[j].Pd,['Pd',S.sys.pumps[0].tag]);
+  });
+}
+function prefillHint(i,key){
+  if(!isSys()) return '';
+  var m=ui.pre[S.sys.active+'.'+i+'.'+key]; if(!m) return '';
+  var t=esc(m[1]);
+  if(key==='Ps') return L3('Precargada con la descarga de '+t+' (editable)','Prefilled with the discharge of '+t+' (editable)','Pré-carregada com a descarga de '+t+' (editável)');
+  if(key==='Pd') return L3('Precargada con la descarga de '+t+' (editable)','Prefilled with the discharge of '+t+' (editable)','Pré-carregada com a descarga de '+t+' (editável)');
+  return L3('Caudal común, precargado de '+t+' (editable)','Common flow, prefilled from '+t+' (editable)','Vazão comum, pré-carregada de '+t+' (editável)');
+}
+function afterEditSys(path){
+  if(!isSys()) return;
+  var m=/^points\.(\d+)\.(Ps|Pd|Q)$/.exec(path);
+  if(m){ delete ui.pre[S.sys.active+'.'+m[1]+'.'+m[2]]; var el=$main.querySelector('input[data-bind="'+path+'"]'); if(el){ var hn=el.closest('.f').querySelector('.hint.pre'); if(hn) hn.remove(); } }
+}
+function curTag(){ return isSys() ? S.sys.pumps[S.sys.active].tag : S.meta.tag; }
+function measureSub(){
+  if(!isSys()) return subLine();
+  return (esc(S.meta.tag)||arrName(S.arr))+' · '+arrName(S.arr)+' · '+L3(S.sys.pumps.length+' bombas',S.sys.pumps.length+' pumps',S.sys.pumps.length+' bombas');
+}
+function equipTagFields(){
+  if(!isSys()) return F('Equipo / TAG','meta.tag','txt',{ph:'P-101A',cls:'span2'});
+  var k=S.sys.active;
+  return F(L3('Sistema / TAG','System / TAG','Sistema / TAG'),'meta.tag','txt',{ph:L3('Estación de bombeo 1','Pump station 1','Estação de bombeamento 1')})+
+    F(L3('Bomba '+pumpLabel(k)+' / TAG','Pump '+pumpLabel(k)+' / TAG','Bomba '+pumpLabel(k)+' / TAG'),'sys.pumps.'+k+'.tag','txt',{ph:'P-101A'});
+}
+function sysTopHTML(){
+  var h='<section class="card"><span class="fl" style="margin-bottom:8px">'+L3('Arreglo','Arrangement','Arranjo')+'</span>'+
+    seg('arr', S.arr||'single', ['single','parallel','series','mixed'].map(function(a){ return [a, arrName(a)]; }), L3('Arreglo de bombas','Pump arrangement','Arranjo de bombas'));
+  if(!isSys()) return h+'</section>';
+  var k=S.sys.active, n=S.sys.pumps.length;
+  h+='<div class="chips" role="group" aria-label="'+L3('Bombas','Pumps','Bombas')+'" style="margin-top:12px">'+
+    S.sys.pumps.map(function(P,i){ return '<button type="button" class="pc" data-act="pump" data-i="'+i+'" aria-pressed="'+(i===k)+'" title="'+esc(P.tag)+'">'+pumpLabel(i)+'</button>'; }).join('')+
+    (n<SYS_MAX_PUMPS?'<button type="button" class="pc icon" data-act="pumpadd" aria-label="'+L3('Agregar bomba','Add pump','Adicionar bomba')+'">'+ico('plus')+'</button>':'')+
+    (n>SYS_MIN_PUMPS?'<button type="button" class="pc icon" data-act="pumpdel" aria-label="'+L3('Quitar '+pumpLabel(k),'Remove '+pumpLabel(k),'Remover '+pumpLabel(k))+'">'+ico('minus')+'</button>':'')+'</div>';
+  h+='<p class="hint">'+L3('Editando ','Editing ','Editando ')+'<b>'+pumpLabel(k)+'</b>'+(S.sys.pumps[k].tag!==pumpLabel(k)?' · '+esc(S.sys.pumps[k].tag):'')+'. '+
+    (S.arr==='parallel'?L3('Las bombas comparten succión y descarga; el caudal del grupo es la suma.','Pumps share suction and discharge; the group flow is the sum.','As bombas compartilham sucção e descarga; a vazão do grupo é a soma.'):
+     S.arr==='series'?L3('El caudal es común y las alturas se suman, en el orden P-1, P-2…','Flow is common and heads add up, in the order P-1, P-2…','A vazão é comum e as alturas se somam, na ordem P-1, P-2…'):
+     L3('Los trenes trabajan en paralelo; dentro de cada tren las bombas están en serie, en orden.','Trains run in parallel; within each train the pumps are in series, in order.','Os trens operam em paralelo; em cada trem as bombas estão em série, em ordem.'))+'</p>';
+  if(S.arr==='mixed'){
+    var maxT=Math.min(n, Math.max.apply(null,S.sys.pumps.map(function(P){ return P.train||0; }))+2);
+    var tl=[]; for(var t=0;t<maxT;t++) tl.push(t);
+    h+='<span class="fl" style="margin:12px 2px 8px">'+L3('Tren de '+pumpLabel(k),'Train of '+pumpLabel(k),'Trem de '+pumpLabel(k))+'</span><div class="chips" role="group" aria-label="'+L3('Tren','Train','Trem')+'">'+
+      tl.map(function(t){ return '<button type="button" class="pc txt" data-act="train" data-v="'+t+'" aria-pressed="'+((S.sys.pumps[k].train||0)===t)+'">'+L3('Tren '+(t+1),'Train '+(t+1),'Trem '+(t+1))+'</button>'; }).join('')+'</div>';
+  }
+  if(k>0) h+='<button type="button" class="btn sm block" style="margin-top:12px" data-act="copyp1">'+ico('copy')+L3('Copiar datos de P-1','Copy data from P-1','Copiar dados de P-1')+'</button>';
+  if(S.arr==='parallel'){
+    h+='<span class="fl" style="margin:14px 2px 8px">'+L3('Caudal','Flow','Vazão')+'</span>'+seg('qmode', S.sys.qMode, [['each',L3('Medido en cada bomba','Measured on each pump','Medida em cada bomba')],['total',L3('Solo el total','Total only','Só o total')]], L3('Cómo se conoce el caudal','How the flow is known','Como a vazão é conhecida'));
+    if(S.sys.qMode==='total') h+='<div class="note est" style="margin-top:10px"><span class="tag-est">'+L3('Estimación','Estimate','Estimativa')+'</span> '+
+      L3('El caudal de cada bomba se estima repartiendo el total en proporción a lo que indica su curva H–Q a la altura medida. Requiere la curva del fabricante de todas las bombas.','Each pump’s flow is estimated by splitting the total in proportion to what its H–Q curve gives at the measured head. Requires the manufacturer curve of every pump.','A vazão de cada bomba é estimada repartindo o total em proporção ao que sua curva H–Q indica na altura medida. Requer a curva do fabricante de todas as bombas.')+'</div>';
+  }
+  return h+'</section>';
+}
+function qFieldHTML(i){
+  var b='points.'+i+'.';
+  if(isSys() && S.arr==='parallel' && S.sys.qMode==='total')
+    return F(L3('Q total del grupo','Group total Q','Q total do grupo'),'sys.pumps.0.points.'+i+'.Qtot','Q',{cls:'span2',hint:L3('El mismo para todas las bombas de este punto','Same for all pumps at this point','O mesmo para todas as bombas deste ponto')});
+  return F('Q caudal',b+'Q','Q',{cls:'span2',hint:prefillHint(i,'Q'),hintCls:'pre'});
+}
+function onPointChange(){ if(isSys()) prefill(S.sys.active); }
+function addPoint(){
+  if(!isSys()){ S.points.push(newPoint()); return; }
+  syncActive(); S.sys.pumps.forEach(function(P){ P.points.push(newPoint()); });
+}
+function delPoint(i){
+  if(!isSys()){ S.points.splice(i,1); if(!S.points.length) S.points.push(newPoint()); return; }
+  syncActive(); S.sys.pumps.forEach(function(P){ P.points.splice(i,1); if(!P.points.length) P.points.push(newPoint()); });
+  ui.pre={};
+}
+function addPump(){
+  if(S.sys.pumps.length>=SYS_MAX_PUMPS){ toast(L3('Máximo '+SYS_MAX_PUMPS+' bombas','Maximum '+SYS_MAX_PUMPS+' pumps','Máximo '+SYS_MAX_PUMPS+' bombas')); return; }
+  syncActive();
+  var n=S.sys.pumps.length, last=S.sys.pumps[n-1];
+  S.sys.pumps.push(newPumpEntry(n, S.points.length, S.arr==='mixed'?(last.train||0):0));
+  setActive(n);
+}
+function delPump(){
+  var k=S.sys.active;
+  if(S.sys.pumps.length<=SYS_MIN_PUMPS){ toast(L3('Un sistema necesita al menos 2 bombas','A system needs at least 2 pumps','Um sistema precisa de pelo menos 2 bombas')); return; }
+  askConfirm(L3('¿Quitar '+pumpLabel(k)+' y sus datos?','Remove '+pumpLabel(k)+' and its data?','Remover '+pumpLabel(k)+' e seus dados?'), function(){
+    syncActive(); S.sys.pumps.splice(k,1); ui.pre={};
+    S.sys.active=Math.max(0,k-1); bindActive(); save(); render();
+  });
+}
+function copyP1(){
+  var k=S.sys.active; if(k<=0) return;
+  askConfirm(L3('¿Copiar a '+pumpLabel(k)+' la placa, la curva y la instalación de P-1? Las lecturas no se copian.','Copy P-1 nameplate, curve and installation to '+pumpLabel(k)+'? Readings are not copied.','Copiar para '+pumpLabel(k)+' a placa, a curva e a instalação de P-1? As leituras não são copiadas.'), function(){
+    syncActive(); var P=S.sys.pumps[k], P1=S.sys.pumps[0];
+    P.pump=clone(P1.pump); P.inst=clone(P1.inst); bindActive(); save(); render();
+    toast(L3('Datos de P-1 copiados','P-1 data copied','Dados de P-1 copiados'));
+  });
+}
+
+/* ---- Resultado del sistema ---- */
+function sysStatus(R){
+  if(!R.ok) return 'bad';
+  return worstStatus(R.pumps.map(function(e){ return e.r.status.k; }));
+}
+function sysChartSVG(R){
+  var C=sysCurves(S), W=340, Hh=220, m={l:38,r:14,t:22,b:34}, id='rv'+(++svgSeq), cq=function(q){ return fromSI('Q',q,S); };
+  var hasInd=C.indiv.some(function(c){ return c.length>=2; });
+  var xs=[cq(R.g.Q)], ys=[R.g.H];
+  R.pumps.forEach(function(e){ xs.push(cq(e.r.Q)); ys.push(e.r.H); });
+  C.indiv.forEach(function(c){ c.forEach(function(p){ xs.push(cq(p.Q)); ys.push(p.H); }); });
+  if(C.comb) C.comb.forEach(function(p){ xs.push(cq(p.Q)); ys.push(p.H); });
+  var xr=rangeOf(xs,0.08,true), yr=rangeOf(ys,0.10,true); xr[0]=0; yr[0]=0;
+  var fr=frame(W,Hh,m,xr[0],xr[1],yr[0],yr[1],'Caudal ('+esc(unitLabel('Q'))+')','H (m)'), X=fr.X, Y=fr.Y;
+  var aria=L3('Altura frente a caudal del sistema ','System head vs. flow, ','Altura versus vazão do sistema ')+arrName(S.arr)+'. '+
+    L3('Punto del grupo: ','Group point: ','Ponto do grupo: ')+fq(R.g.Q)+' '+unitLabel('Q')+', '+f(R.g.H,1)+' m. '+
+    R.pumps.map(function(e){ return e.tag+' '+fq(e.r.Q)+' '+unitLabel('Q')+', '+f(e.r.H,1)+' m'; }).join('; ')+'. '+
+    (C.comb?L3('Incluye la curva combinada.','Includes the combined curve.','Inclui a curva combinada.'):'');
+  var s='<svg class="chart" viewBox="0 0 '+W+' '+Hh+'" role="img" aria-label="'+esc(aria)+'"><clipPath id="'+id+'"><rect class="reveal" x="'+m.l+'" y="0" width="'+(W-m.l-m.r+6)+'" height="'+Hh+'"/></clipPath>'+fr.svg;
+  s+='<g clip-path="url(#'+id+')">';
+  C.indiv.forEach(function(c){ if(c.length>=2) s+='<path class="ind" d="'+smoothPath(c.map(function(p){ return [X(cq(p.Q)),Y(p.H)]; }))+'"/>'; });
+  if(C.comb) s+='<path class="cur" d="'+smoothPath(C.comb.map(function(p){ return [X(cq(p.Q)),Y(p.H)]; }))+'"/>';
+  s+='</g>';
+  R.pumps.forEach(function(e){ var x=X(cq(e.r.Q)), y=Y(e.r.H); s+='<circle class="sp" cx="'+x.toFixed(1)+'" cy="'+y.toFixed(1)+'" r="5"/><text class="pl" x="'+(x+8).toFixed(1)+'" y="'+(y-7).toFixed(1)+'">'+pumpLabel(e.k)+'</text>'; });
+  var gx=X(cq(R.g.Q)), gy=Y(R.g.H);
+  s+='<line class="guide" x1="'+gx.toFixed(1)+'" x2="'+gx.toFixed(1)+'" y1="'+gy.toFixed(1)+'" y2="'+(Hh-m.b)+'"/><line class="guide" x1="'+m.l+'" x2="'+gx.toFixed(1)+'" y1="'+gy.toFixed(1)+'" y2="'+gy.toFixed(1)+'"/>';
+  s+='<circle class="mp" cx="'+gx.toFixed(1)+'" cy="'+gy.toFixed(1)+'" r="7"/></svg>';
+  s+='<div class="leg">'+(hasInd?'<span><i class="ind"></i>'+L3('Curvas individuales','Individual curves','Curvas individuais')+'</span>':'')+
+    (C.comb?'<span><i></i>'+(S.arr==='parallel'?L3('Combinada (Q sumados a igual H)','Combined (Q added at equal H)','Combinada (Q somadas a igual H)'):S.arr==='series'?L3('Combinada (H sumadas a igual Q)','Combined (H added at equal Q)','Combinada (H somadas a igual Q)'):L3('Combinada (trenes)','Combined (trains)','Combinada (trens)'))+'</span>':'')+
+    '<span><i class="dot" style="background:var(--blue-700)"></i>'+L3('Bombas medidas','Measured pumps','Bombas medidas')+'</span><span><i class="dot"></i>'+L3('Grupo','Group','Grupo')+'</span></div>';
+  if(!hasInd) s+='<p class="hint">'+L3('Cargue la curva H–Q de cada bomba (Medir › Equipo › Curva del fabricante) para ver las curvas individuales y la combinada.','Enter each pump’s H–Q curve (Measure › Equipment › Manufacturer curve) to see the individual and combined curves.','Cadastre a curva H–Q de cada bomba (Medir › Equipamento › Curva do fabricante) para ver as curvas individuais e a combinada.')+'</p>';
+  else if(!C.comb) s+='<p class="hint">'+L3('La curva combinada necesita la curva H–Q de todas las bombas con rangos que se superpongan.','The combined curve needs every pump’s H–Q curve, with overlapping ranges.','A curva combinada precisa da curva H–Q de todas as bombas, com faixas que se sobreponham.')+'</p>';
+  return s;
+}
+function vSysResult(){
+  var j=Math.min(ui.sel, S.points.length-1), R=sysCalc(S,j), n=S.sys.pumps.length, h='';
+  var hd={ title:esc(S.meta.tag)||arrName(S.arr), sub:arrName(S.arr)+' · '+L3(n+' bombas',n+' pumps',n+' bombas')+' · '+L3('Punto '+(j+1),'Point '+(j+1),'Ponto '+(j+1))+' · '+(fmtDate(S.meta.fecha)||'Sin fecha de ensayo') };
+  if(S.points.length>1) h+='<div class="chips" role="group" aria-label="'+L3('Punto','Point','Ponto')+'">'+S.points.map(function(p,i){ return '<button type="button" class="pc txt" data-act="sel" data-i="'+i+'" aria-pressed="'+(i===j)+'">'+L3('Punto '+(i+1),'Point '+(i+1),'Ponto '+(i+1))+'</button>'; }).join('')+'</div>';
+  var errs=R.errors.map(function(t){ return '<div class="note bad">'+esc(trHTML(t))+'</div>'; }).join('');
+  if(!R.complete){
+    h+='<div class="note">'+L3('Para calcular el grupo hacen falta datos completos de todas las bombas en este punto.','All pumps need complete data at this point to compute the group.','Para calcular o grupo são necessários dados completos de todas as bombas neste ponto.')+'</div>'+errs;
+    h+='<div class="rows">'+R.pumps.map(function(e){ var r=e.r, msg=r.ok?L3('Completa','Complete','Completa'):(r.error?esc(trHTML(r.error)):L3('Faltan: ','Missing: ','Faltam: ')+esc(r.missing.join(', ')));
+      return '<button type="button" class="row" data-act="pumpedit" data-i="'+e.k+'"><span class="rt"><b>'+pumpLabel(e.k)+(e.tag!==pumpLabel(e.k)?' · '+esc(e.tag):'')+'</b><span style="white-space:normal">'+msg+'</span></span>'+ico('chev','chev')+'</button>'; }).join('')+'</div>';
+    return { hd:hd, body:h };
+  }
+  var g=R.g, st=sysStatus(R);
+  hd.hero=heroHTML(g.eta, g.ref>0?{ v:g.ref, lab:L3('Ref.','Ref.','Ref.'), vs:L3('vs. referencia','vs. reference','vs. referência'), d:g.eta-g.ref }:null,
+    L3('Eficiencia del grupo','Group efficiency','Eficiência do grupo'),
+    L3('Medidor de eficiencia del grupo: ','Group efficiency gauge: ','Medidor de eficiência do grupo: ')+f(g.eta,1)+' %'+(g.ref>0?'. '+L3('Referencia ','Reference ','Referência ')+f(g.ref,1)+' %':'')+'.');
+  h+='<div>'+badge({ k:st, t:g.invalid?L3('Revise los datos','Check the data','Revise os dados'):stTxt(st) })+(R.est?' <span class="tag-est">'+L3('Estimación','Estimate','Estimativa')+'</span>':'')+'</div>';
+  h+='<div class="kgrid">'+
+    kcard(L3('Caudal del grupo','Group flow','Vazão do grupo'), fq(g.Q), esc(unitLabel('Q')), g.dP!==null ? 'ΔP '+L3('total','total','total')+' '+f(fromSI('P',g.dP,S),2)+' '+esc(unitLabel('P')) : L3('suma de '+n+' bombas','sum of '+n+' pumps','soma de '+n+' bombas'))+
+    kcard(L3('Energía específica','Specific energy','Energia específica'), f(g.Eesp,3), 'kWh/m³', f(g.EespBbl,3)+' kWh/bbl')+
+    kcard(L3('Potencia total','Total power','Potência total'), f(g.Pe,1), 'kW', L3('eléctrica · eje ','electrical · shaft ','elétrica · eixo ')+f(g.Peje,1)+' kW')+
+    '<div class="card save"><span class="k-l">'+L3('Costo anual estimado','Estimated annual cost','Custo anual estimado')+'</span>'+
+      (g.costYear!==undefined?'<span class="k-v">'+nInt(g.costYear)+'</span><span class="k-s">'+nInt(g.kwhYear)+' kWh'+L3('/año','/yr','/ano')+'</span>':
+       g.kwhYear!==undefined?'<span class="k-v">'+nInt(g.kwhYear)+'<small>kWh</small></span><span class="k-s">'+L3('Cargue el precio del kWh en Ajustes','Enter the kWh price in Settings','Informe o preço do kWh em Ajustes')+'</span>':
+       '<span class="k-v">—</span><span class="k-s">'+L3('Cargue horas y precio en Ajustes','Enter hours and price in Settings','Informe horas e preço em Ajustes')+'</span>')+'</div></div>';
+  if(R.est) h+='<div class="note est"><span class="tag-est">'+L3('Estimación','Estimate','Estimativa')+'</span> '+L3('Caudal total medido: ','Measured total flow: ','Vazão total medida: ')+fq(g.Q)+' '+esc(unitLabel('Q'))+'. '+L3('El reparto entre bombas se estimó con las curvas H–Q; las eficiencias por bomba son estimadas.','The split between pumps was estimated from the H–Q curves; per-pump efficiencies are estimates.','A divisão entre bombas foi estimada com as curvas H–Q; as eficiências por bomba são estimadas.')+'</div>';
+  h+=errs+R.warns.map(function(w){ return '<div class="note '+(w.k==='info'?'':w.k)+'">'+esc(trHTML(w.t))+'</div>'; }).join('');
+  h+='<section class="card flush plist"><h3 style="padding:14px 14px 0;margin:0 0 4px">'+L3('Por bomba','Per pump','Por bomba')+'</h3>'+R.pumps.map(function(e){
+    var r=e.r, k=r.invalid?'bad':r.status.k;
+    return '<button type="button" class="row pr" data-act="pumpedit" data-i="'+e.k+'"><span class="pn">'+pumpLabel(e.k)+'</span><span class="pm">'+
+      (e.tag!==pumpLabel(e.k)?esc(e.tag)+' · ':'')+(S.arr==='mixed'?L3('Tren ','Train ','Trem ')+(e.train+1)+' · ':'')+'<b>'+f(r.Pe,1)+' kW</b>'+(r.qr!==undefined?' · <b>'+f(r.qr*100,0)+' %</b> '+L3('del BEP','of BEP','do BEP'):'')+'<br>'+stShort(k)+(e.est?' · '+L3('estimada','estimated','estimada'):'')+'</span>'+
+      '<span class="pe"><b>'+f(r.eta,1)+' %</b></span>'+ico('chev','chev')+'</button>';
+  }).join('')+'</section>';
+  h+='<section class="card r18"><h3><span>'+L3('Altura frente a caudal','Head vs. flow','Altura versus vazão')+'</span></h3>'+sysChartSVG(R)+'</section>';
+  h+=actionsHTML();
+  h+='<h2 class="sh">'+L3('Detalle','Details','Detalhes')+'</h2>';
+  h+='<details class="acc" open><summary>'+L3('Tabla por bomba','Per-pump table','Tabela por bomba')+'</summary><div class="tw">'+sysTableHTML(R)+'</div></details>';
+  h+='<details class="acc"><summary>'+L3('Energía y costo','Energy and cost','Energia e custo')+'</summary><div class="ab"><div class="fgrid">'+F('Costo de la energía (por kWh)','econ.price','num',{suf:'',ph:fmtIn(0.10)})+F('Horas de operación al año','econ.hours','num',{suf:'h'})+'</div>'+
+    '<div class="hint" style="margin-top:10px">'+L3('Costo anual = potencia eléctrica total × horas × precio. η del grupo = Σ potencia hidráulica / Σ potencia al eje.','Annual cost = total electrical power × hours × price. Group η = Σ hydraulic power / Σ shaft power.','Custo anual = potência elétrica total × horas × preço. η do grupo = Σ potência hidráulica / Σ potência no eixo.')+'</div></div></details>';
+  return { hd:hd, body:h };
+}
+function sysTableHTML(R){
+  var g=R.g, uP=esc(unitLabel('P'));
+  return '<table><thead><tr><th>'+L3('Bomba','Pump','Bomba')+'</th><th>Q ('+esc(unitLabel('Q'))+')</th><th>ΔP ('+uP+')</th><th>H (m)</th><th>Ph (kW)</th><th>Pe (kW)</th><th>Peje (kW)</th><th>η</th><th>% BEP</th><th>'+L3('Estado','Status','Estado')+'</th></tr></thead><tbody>'+
+    R.pumps.map(function(e){ var r=e.r; return '<tr><td>'+pumpLabel(e.k)+'</td><td>'+fq(r.Q)+(e.est?'*':'')+'</td><td>'+f(fromSI('P',e.dP,S),2)+'</td><td>'+f(r.H,1)+'</td><td>'+f(r.Ph,1)+'</td><td>'+f(r.Pe,1)+'</td><td>'+f(r.Peje,1)+'</td><td><b>'+f(r.eta,1)+' %</b></td><td>'+(r.qr!==undefined?f(r.qr*100,0):'—')+'</td><td>'+stShort(r.invalid?'bad':r.status.k)+'</td></tr>'; }).join('')+
+    '<tr><td><b>'+L3('Grupo','Group','Grupo')+'</b></td><td><b>'+fq(g.Q)+'</b></td><td>'+(g.dP!==null?f(fromSI('P',g.dP,S),2):'—')+'</td><td>'+f(g.H,1)+'</td><td>'+f(g.Ph,1)+'</td><td>'+f(g.Pe,1)+'</td><td>'+f(g.Peje,1)+'</td><td><b>'+f(g.eta,1)+' %</b></td><td>—</td><td>'+f(g.Eesp,3)+' kWh/m³</td></tr></tbody></table>'+
+    (R.est?'<p class="hint" style="padding:0 12px 12px">* '+L3('caudal estimado','estimated flow','vazão estimada')+'</p>':'');
+}
+
+/* ---- Historial, informes y CSV del sistema ---- */
+function histArrTxt(e){ return arrName(e.arr)+' · '+L3(e.np+' bombas',e.np+' pumps',e.np+' bombas'); }
+function sysHistRecord(){
+  syncActive();
+  var j=Math.min(ui.sel,S.points.length-1), R=sysCalc(S,j);
+  if(!R.complete) return null;
+  return { id:Date.now().toString(36), ts:Date.now(), sys:true, arr:S.arr, np:S.sys.pumps.length, tag:S.meta.tag||'', empresa:S.meta.empresa||'', fecha:S.meta.fecha,
+    n:S.points.length, eta:R.g.eta, eesp:R.g.Eesp, Q:R.g.Q, Pe:R.g.Pe, est:R.est, st:sysStatus(R), demo:!!S.demo, sel:j,
+    pumps:R.pumps.map(function(e){ return { tag:e.tag, train:e.train, Q:e.r.Q, dP:e.dP, eta:e.r.eta, Pe:e.r.Pe, st:e.r.status.k }; }), snap:clone(S) };
+}
+function sysReportText(){
+  syncActive();
+  var fl=FLUIDS[S.fluid.preset]||FLUIDS.otro, n=S.sys.pumps.length;
+  var L=demoLine().concat([L3('EVALUACIÓN DE EFICIENCIA DE UN SISTEMA DE BOMBAS','PUMP SYSTEM EFFICIENCY EVALUATION','AVALIAÇÃO DE EFICIÊNCIA DE UM SISTEMA DE BOMBAS'),
+    'Empresa: '+(S.meta.empresa||'—'),L3('Sistema','System','Sistema')+'/TAG: '+(S.meta.tag||'—')+'   Fecha del ensayo: '+(fmtDate(S.meta.fecha)||'—'),'Servicio: '+(S.meta.ubic||'—')+'   Responsable: '+(S.meta.resp||'—'),
+    L3('Arreglo','Arrangement','Arranjo')+': '+arrName(S.arr)+' · '+L3(n+' bombas',n+' pumps',n+' bombas'),
+    'Fluido: '+fl.n+' · ρ '+f(S.fluid.rho,0)+' kg/m³ · ν '+f(S.fluid.visc,1)+' cSt · T '+f(S.fluid.T,0)+' °C']);
+  S.points.forEach(function(p,j){
+    var R=sysCalc(S,j);
+    L.push('', L3('PUNTO ','POINT ','PONTO ')+(j+1)+(R.est?' · '+L3('REPARTO DE CAUDAL ESTIMADO','ESTIMATED FLOW SPLIT','DIVISÃO DE VAZÃO ESTIMADA'):''));
+    L.push(L3('Bomba','Pump','Bomba')+' | TAG | Q m³/h | ΔP bar | H m | Ph kW | Pe kW | Peje kW | η % | % BEP | '+L3('Estado','Status','Estado'));
+    R.pumps.forEach(function(e){ var r=e.r;
+      L.push(pumpLabel(e.k)+' | '+e.tag+' | '+(r.ok?f(r.Q,1)+(e.est?'*':'')+' | '+f(e.dP,2)+' | '+f(r.H,1)+' | '+f(r.Ph,1)+' | '+f(r.Pe,1)+' | '+f(r.Peje,1)+' | '+f(r.eta,1)+' | '+(r.qr!==undefined?f(r.qr*100,0):'—')+' | '+stTxt(r.invalid?'bad':r.status.k):(r.error||L3('incompleto','incomplete','incompleto')))); });
+    if(R.complete){ var g=R.g;
+      L.push(L3('GRUPO','GROUP','GRUPO')+': Q '+f(g.Q,1)+' m³/h'+(g.dP!==null?' · ΔP total '+f(g.dP,2)+' bar':'')+' · Pe '+f(g.Pe,1)+' kW · η '+f(g.eta,1)+' % · η global '+f(g.etaG,1)+' % · '+f(g.Eesp,3)+' kWh/m³'+
+        (g.costYear!==undefined?' · '+L3('costo anual ','annual cost ','custo anual ')+nInt(g.costYear):g.kwhYear!==undefined?' · '+nInt(g.kwhYear)+' kWh'+L3('/año','/yr','/ano'):''));
+    }
+    R.errors.concat(R.warns.map(function(w){ return w.t; })).forEach(function(t){ L.push('! '+t); });
+  });
+  L.push('','Método: hidráulico–eléctrico in situ. Resultado orientativo (no es ensayo de aceptación ISO 9906).',L3('η del grupo = Σ potencia hidráulica / Σ potencia al eje. Energía específica = potencia eléctrica total / caudal del grupo.','Group η = Σ hydraulic power / Σ shaft power. Specific energy = total electrical power / group flow.','η do grupo = Σ potência hidráulica / Σ potência no eixo. Energia específica = potência elétrica total / vazão do grupo.'));
+  return trHTML(L.join('\n'));
+}
+function sysCSV(){
+  syncActive();
+  var rows=[[L3('Registro','Record','Registro'),L3('Punto','Point','Ponto'),L3('Bomba','Pump','Bomba'),'TAG',L3('Tren','Train','Trem'),'Q (m3/h)',L3('Q estimado','Q estimated','Q estimada'),'Ps (bar g)','Pd (bar g)','dP (bar)','H (m)','P hidraulica (kW)','P electrica (kW)','P eje (kW)','eta bomba %','eta global %','kWh/m3','Q/QBEP %',L3('estado','status','estado')]];
+  S.points.forEach(function(p,j){
+    var R=sysCalc(S,j);
+    R.pumps.forEach(function(e){ var r=e.r, pp=e.p||{};
+      rows.push([L3('bomba','pump','bomba'),j+1,pumpLabel(e.k),e.tag,e.train+1, r.ok?cn(r.Q,2):'', e.est?L3('sí','yes','sim'):'', cn(pp.Ps,3), cn(pp.Pd,3), cn(e.dP,3), r.ok?cn(r.H,2):'', r.ok?cn(r.Ph,2):'', r.ok?cn(r.Pe,2):'', r.ok?cn(r.Peje,2):'', r.ok?cn(r.eta,2):'', r.ok?cn(r.etaG,2):'', r.ok?cn(r.Eesp,4):'', r.qr!==undefined?cn(r.qr*100,1):'', r.ok?(r.invalid?'η > 100 %':r.status.t):(r.error||'Incompleto')]); });
+    if(R.complete){ var g=R.g;
+      rows.push([L3('grupo','group','grupo'),j+1,'',S.meta.tag||'','',cn(g.Q,2),R.est?L3('sí','yes','sim'):'','','',g.dP!==null?cn(g.dP,3):'',cn(g.H,2),cn(g.Ph,2),cn(g.Pe,2),cn(g.Peje,2),cn(g.eta,2),cn(g.etaG,2),cn(g.Eesp,4),'',stTxt(sysStatus(R))]); }
+  });
+  var head=['Empresa',S.meta.empresa,L3('Sistema','System','Sistema')+'/TAG',S.meta.tag,'Fecha del ensayo',fmtDate(S.meta.fecha),L3('Arreglo','Arrangement','Arranjo'),arrName(S.arr),'Fluido',(FLUIDS[S.fluid.preset]||{}).n,'rho kg/m3',cn(S.fluid.rho,1),'visc cSt',cn(S.fluid.visc,2)];
+  return csvOut((S.demo?[demoLine()]:[]).concat([head],[[]],rows));
+}
+function sysHTMLReport(){
+  syncActive();
+  var fl=FLUIDS[S.fluid.preset]||FLUIDS.otro, n=S.sys.pumps.length, body='';
+  S.points.forEach(function(p,j){
+    var R=sysCalc(S,j);
+    body+='<h2 style="font-size:17px;margin:18px 0 4px">'+L3('Punto ','Point ','Ponto ')+(j+1)+(R.est?' · '+L3('reparto de caudal estimado','estimated flow split','divisão de vazão estimada'):'')+'</h2>';
+    body+='<table><thead><tr><th>'+L3('Bomba','Pump','Bomba')+'</th><th>TAG</th><th>Q m³/h</th><th>ΔP bar</th><th>H m</th><th>Ph kW</th><th>Pe kW</th><th>Peje kW</th><th>η %</th><th>% BEP</th><th>'+L3('Estado','Status','Estado')+'</th></tr></thead><tbody>'+
+      R.pumps.map(function(e){ var r=e.r; return r.ok?'<tr><td>'+pumpLabel(e.k)+'</td><td>'+esc(e.tag)+'</td><td>'+f(r.Q,1)+(e.est?'*':'')+'</td><td>'+f(e.dP,2)+'</td><td>'+f(r.H,1)+'</td><td>'+f(r.Ph,1)+'</td><td>'+f(r.Pe,1)+'</td><td>'+f(r.Peje,1)+'</td><td><b>'+f(r.eta,1)+'</b></td><td>'+(r.qr!==undefined?f(r.qr*100,0):'—')+'</td><td>'+stTxt(r.invalid?'bad':r.status.k)+'</td></tr>':'<tr><td>'+pumpLabel(e.k)+'</td><td>'+esc(e.tag)+'</td><td colspan="9" style="text-align:left">'+esc(r.error||L3('Incompleto','Incomplete','Incompleto'))+'</td></tr>'; }).join('')+
+      (R.complete?'<tr><td><b>'+L3('Grupo','Group','Grupo')+'</b></td><td></td><td><b>'+f(R.g.Q,1)+'</b></td><td>'+(R.g.dP!==null?f(R.g.dP,2):'—')+'</td><td>'+f(R.g.H,1)+'</td><td>'+f(R.g.Ph,1)+'</td><td>'+f(R.g.Pe,1)+'</td><td>'+f(R.g.Peje,1)+'</td><td><b>'+f(R.g.eta,1)+'</b></td><td>—</td><td>'+stTxt(sysStatus(R))+'</td></tr>':'')+'</tbody></table>';
+    if(R.complete) body+='<p><b>'+L3('Resumen del grupo','Group summary','Resumo do grupo')+':</b> η '+f(R.g.eta,1)+' % · η global '+f(R.g.etaG,1)+' % · '+f(R.g.Eesp,3)+' kWh/m³'+(R.g.costYear!==undefined?' · '+L3('costo anual ','annual cost ','custo anual ')+nInt(R.g.costYear):'')+'</p>';
+    var notes=R.errors.concat(R.warns.map(function(w){ return w.t; }));
+    if(notes.length) body+='<ul>'+notes.map(function(t){ return '<li>'+esc(t)+'</li>'; }).join('')+'</ul>';
+  });
+  var html=reportHead(L3('Informe de eficiencia ','Efficiency report ','Relatório de eficiência ')+esc(S.meta.tag))+
+    '<h1>'+L3('Evaluación de eficiencia de un sistema de bombas','Pump system efficiency evaluation','Avaliação de eficiência de um sistema de bombas')+'</h1><div class="m">Método hidráulico–eléctrico in situ</div><p><b>Empresa:</b> '+esc(S.meta.empresa||'—')+' &nbsp; <b>Fecha del ensayo:</b> '+esc(fmtDate(S.meta.fecha)||'—')+'<br><b>'+L3('Sistema','System','Sistema')+'/TAG:</b> '+esc(S.meta.tag||'—')+'<br><b>Servicio:</b> '+esc(S.meta.ubic||'—')+' &nbsp; <b>Responsable:</b> '+esc(S.meta.resp||'—')+'<br><b>'+L3('Arreglo','Arrangement','Arranjo')+':</b> '+arrName(S.arr)+' · '+L3(n+' bombas',n+' pumps',n+' bombas')+'<br><b>Fluido:</b> '+esc(fl.n)+' · ρ '+f(S.fluid.rho,0)+' kg/m³ · ν '+f(S.fluid.visc,1)+' cSt · T '+f(S.fluid.T,0)+' °C</p>'+
+    body+'<p class="m">'+L3('η del grupo = Σ potencia hidráulica / Σ potencia al eje. Energía específica = potencia eléctrica total / caudal del grupo. * = caudal estimado con las curvas.','Group η = Σ hydraulic power / Σ shaft power. Specific energy = total electrical power / group flow. * = flow estimated from the curves.','η do grupo = Σ potência hidráulica / Σ potência no eixo. Energia específica = potência elétrica total / vazão do grupo. * = vazão estimada com as curvas.')+'</p>'+
+    '<p class="m">Resultados orientativos; no sustituyen un ensayo de aceptación (ISO 9906, ANSI/HI 40.6) ni los ensayos de API 610 / ISO 13709.</p></body></html>';
+  return trHTML(html);
+}
+function sysFormulasHTML(){
+  return [[L3('Sistemas: potencia hidráulica por bomba','Systems: hydraulic power per pump','Sistemas: potência hidráulica por bomba'),'Ph = Q [m³/h] · ΔP [bar] / 36  [kW]  (= ρ·g·Q·H '+L3('con Δz = 0 y Ds = Dd','with Δz = 0 and Ds = Dd','com Δz = 0 e Ds = Dd')+')'],
+    [L3('Sistemas: eficiencia del grupo','Systems: group efficiency','Sistemas: eficiência do grupo'),'ηgrupo = Σ Ph / Σ Peje     ηglobal = Σ Ph / Σ Pe'],
+    [L3('Sistemas: caudal y presión','Systems: flow and pressure','Sistemas: vazão e pressão'),L3('Paralelo: Q = Σ Qk · Serie: Q común, ΔP total = Σ ΔPk','Parallel: Q = Σ Qk · Series: common Q, total ΔP = Σ ΔPk','Paralelo: Q = Σ Qk · Série: Q comum, ΔP total = Σ ΔPk')],
+    [L3('Sistemas: energía específica','Systems: specific energy','Sistemas: energia específica'),'Eesp = Σ Pe / Qgrupo  [kWh/m³]']].map(function(x){ return '<div><b>'+x[0]+'</b><code>'+x[1]+'</code></div>'; }).join('');
+}
+function loadSysDemo(){
+  var keep={units:S.units,unc:S.unc,econ:S.econ}, ex=demoWord();
+  S=normalize(merge(defaultState(),keep));
+  S.demo=true; S.mode='kw'; S.arr='parallel';
+  S.meta={ empresa:ex.co, tag:ex.tag+' '+({es:'paralelo',en:'parallel',pt:'paralelo'})[LANG], ubic:ex.note, fecha:today(), resp:'' };
+  function pump(tag, Q, kW, pmp, curve){
+    var P=newPumpEntry(0,1,0); P.tag=tag; P.pump=merge(newPump(),pmp); P.pump.curve=curve; P.pump.etaMdef=100;
+    P.inst={ Ds:150, Dd:150, dz:0 }; P.points=[merge(newPoint(),{ Q:Q, Ps:1.2, Pd:9.9, kW:kW, obs:({es:'kW = potencia al eje (ejemplo)',en:'kW = shaft power (example)',pt:'kW = potência no eixo (exemplo)'})[LANG] })]; return P;
+  }
+  S.sys={ active:0, qMode:'each', pumps:[
+    pump('P-1',118,41.6,{ Qbep:120, Hbep:89, etaBep:74.5, motorKW:55 },[{Q:0,H:105},{Q:40,H:101,eta:45},{Q:80,H:96,eta:66},{Q:120,H:89,eta:74.5},{Q:150,H:80,eta:72},{Q:170,H:72,eta:67}]),
+    pump('P-2',62,29.0,{ Qbep:80, Hbep:84, etaBep:70, motorKW:37 },[{Q:0,H:100},{Q:30,H:96,eta:48},{Q:60,H:90,eta:64},{Q:80,H:84,eta:70},{Q:100,H:75,eta:68},{Q:115,H:66,eta:62}]) ] };
+  S.single={ pump:newPump(), inst:newInst(), points:[newPoint()] };
+  afterLoad();
+}
 
 /* ===================== RENDER ===================== */
 var VIEWS={ measure:vMeasure, equip:vEquip, fluid:vFluid, result:vResult, history:vHistory, settings:vSettings };
@@ -805,7 +1128,6 @@ function afterEdit(path){
   else if(path.indexOf('fluid.')===0||path.indexOf('pump.')===0) updateViscPanel();
   afterEditSys(path);
 }
-function afterEditSys(){}
 
 /* ---------- Pantalla encendida (Wake Lock) ---------- */
 var wl = null, wakeWanted = false;
@@ -866,16 +1188,21 @@ var ACT={
   theme:function(el){ store.set('ebp:theme', el.dataset.v); applyTheme(); render(); },
   lang:function(el){ setLang(el.dataset.v); },
   demo:function(){ askConfirm(L3('¿Cargar datos de ejemplo? Reemplazan la evaluación actual (el historial se conserva). Quedan rotulados como «Ejemplo».','Load example data? It replaces the current evaluation (history is kept). It is labelled “Example”.','Carregar dados de exemplo? Substituem a avaliação atual (o histórico é mantido). Ficam marcados como “Exemplo”.'), function(){ loadDemo(); ui.pt=0; ui.sel=0; save(); go('measure'); toast(L3('Datos de ejemplo cargados','Example data loaded','Dados de exemplo carregados')); }); },
-  newEval:function(){ askConfirm('¿Empezar una evaluación nueva? Se conservan unidades, incertidumbres y el historial.', function(){ var keep={units:S.units,unc:S.unc,econ:S.econ,mode:S.mode}; S=normalize(merge(defaultState(),keep)); afterLoad(); ui.pt=0; ui.sel=0; save(); go('measure'); toast('Evaluación nueva'); }); },
-  wipe:function(){ askConfirm('¿Borrar todos los datos de este dispositivo, incluido el historial?', function(){ store.set('ebp:hist',[]); S=normalize(defaultState()); afterLoad(); ui.pt=0; ui.sel=0; save(); go('measure'); toast('Datos borrados'); }); },
-  hopen:function(el){ var e=histLoad().filter(function(x){ return x.id===el.dataset.id; })[0]; if(!e) return; S=normalize(merge(defaultState(),e.snap)); afterLoad(); ui.pt=0; ui.sel=e.sel||0; save(); go('result'); },
+  newEval:function(){ askConfirm('¿Empezar una evaluación nueva? Se conservan unidades, incertidumbres y el historial.', function(){ var keep={units:S.units,unc:S.unc,econ:S.econ,mode:S.mode}; S=normalize(merge(defaultState(),keep)); afterLoad(); ui.pre={}; ui.pt=0; ui.sel=0; save(); go('measure'); toast('Evaluación nueva'); }); },
+  wipe:function(){ askConfirm('¿Borrar todos los datos de este dispositivo, incluido el historial?', function(){ store.set('ebp:hist',[]); S=normalize(defaultState()); afterLoad(); ui.pre={}; ui.pt=0; ui.sel=0; save(); go('measure'); toast('Datos borrados'); }); },
+  hopen:function(el){ var e=histLoad().filter(function(x){ return x.id===el.dataset.id; })[0]; if(!e) return; S=normalize(merge(defaultState(),e.snap)); afterLoad(); ui.pre={}; ui.pt=0; ui.sel=e.sel||0; save(); go('result'); },
   hdel:function(el){ askConfirm('¿Eliminar esta evaluación del historial?', function(){ store.set('ebp:hist', histLoad().filter(function(x){ return x.id!==el.dataset.id; })); render(); }); },
+  arr:function(el){ setArr(el.dataset.v); save(); render(); },
+  pump:function(el){ setActive(+el.dataset.i); save(); render(); },
+  pumpadd:function(){ addPump(); save(); render(); },
+  pumpdel:function(){ delPump(); },
+  train:function(el){ S.sys.pumps[S.sys.active].train=+el.dataset.v; ui.pre={}; prefill(S.sys.active); save(); render(); },
+  copyp1:function(){ copyP1(); },
+  qmode:function(el){ S.sys.qMode=el.dataset.v; save(); render(); },
+  pumpedit:function(el){ setActive(+el.dataset.i); ui.pt=Math.min(ui.sel,S.points.length-1); save(); go('measure'); },
+  demoSys:function(){ askConfirm(L3('¿Cargar el ejemplo de 2 bombas en paralelo? Reemplaza la evaluación actual (el historial se conserva). Queda rotulado como «Ejemplo».','Load the 2-pumps-in-parallel example? It replaces the current evaluation (history is kept). It is labelled “Example”.','Carregar o exemplo de 2 bombas em paralelo? Substitui a avaliação atual (o histórico é mantido). Fica marcado como “Exemplo”.'), function(){ loadSysDemo(); ui.pt=0; ui.sel=0; ui.pre={}; save(); go('measure'); toast(L3('Datos de ejemplo cargados','Example data loaded','Dados de exemplo carregados')); }); },
   htag:function(el){ ui.htag = el.dataset.set ? el.dataset.v : null; render(); }
 };
-function onPointChange(){}
-function addPoint(){ S.points.push(newPoint()); }
-function delPoint(i){ S.points.splice(i,1); if(!S.points.length) S.points.push(newPoint()); }
-function afterLoad(){}
 document.addEventListener('click', function(e){
   var el=e.target.closest('[data-act]'); if(!el || el.disabled) return;
   var fn=ACT[el.dataset.act]; if(fn) fn(el);
@@ -909,6 +1236,7 @@ function saveToHistory(){
   toast('Guardado en el historial');
 }
 function histRecord(){
+  if(isSys()) return sysHistRecord();
   var c=calcAll(S);
   if(!c.good.length) return null;
   return { id:Date.now().toString(36), ts:Date.now(), tag:S.meta.tag||'', empresa:S.meta.empresa||'', fecha:S.meta.fecha, tipo:S.pump.tipo, clase:S.pump.clase, n:c.good.length, eta:c.etaAvg,
@@ -961,9 +1289,6 @@ function buildHTMLReport(){
     '<p class="m">Resultados orientativos; no sustituyen un ensayo de aceptación (ISO 9906, ANSI/HI 40.6) ni los ensayos de API 610 / ISO 13709.</p></body></html>';
   return trHTML(html);
 }
-function sysReportText(){ return ''; }
-function sysCSV(){ return ''; }
-function sysHTMLReport(){ return ''; }
 function blobSave(o){
   return new Promise(function(res,rej){
     try{

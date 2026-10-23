@@ -1,5 +1,5 @@
 // Versión: cambie este número en cada publicación para que los teléfonos que ya instalaron la app reciban la nueva.
-const CACHE = 'bombas-v4';
+const CACHE = 'bombas-v5';
 const ASSETS = [
   './', 'index.html', 'styles.css', 'core.js', 'i18n.js', 'app.js', 'manifest.webmanifest',
   'icon-192.png', 'icon-512.png', 'icon-maskable-512.png',
