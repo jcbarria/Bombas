@@ -203,11 +203,11 @@ function vMeasure(){
   h+='<div class="rows">'+
     '<button type="button" class="row" data-act="sub" data-v="equip"><span class="ri">'+ico('pump')+'</span><span class="rt"><b>'+L3('Equipo','Equipment','Equipamento')+'</b><span>'+(esc(curTag())||'Sin TAG')+' · '+TIPOS[P.tipo]+' · '+CLASES[P.clase]+'</span></span>'+ico('chev','chev')+'</button>'+
     '<button type="button" class="row" data-act="sub" data-v="fluid"><span class="ri">'+ico('drop')+'</span><span class="rt"><b>'+L3('Fluido','Fluid','Fluido')+'</b><span>'+esc(pr.n)+' · '+f(fromSI('RHO',fl.rho,S),fl.rho>0&&S.units.RHO==='kgm3'?0:3)+' '+esc(unitLabel('RHO'))+' · '+f(fromSI('VISC',fl.visc,S),1)+' '+esc(unitLabel('VISC'))+'</span></span>'+ico('chev','chev')+'</button></div>';
-  h+=pointCard(i);
   if(S.pump.clase==='gt300') h+='<div class="note warn">Equipo de más de 300 kW: tome los datos eléctricos del relé de protección o de la subestación, no de los bornes de media tensión.</div>';
+  var left=h; h=pointCard(i);
   if('wakeLock' in navigator) h+='<label class="card chk"><input type="checkbox" data-wake="1"'+(wakeWanted?' checked':'')+'><span><b>Mantener la pantalla encendida</b><small>Útil mientras toma lecturas en el campo.</small></span></label>';
   h+='<button type="button" class="btn primary" data-act="calc">'+L3('Calcular eficiencia','Calculate efficiency','Calcular eficiência')+'</button>';
-  return { hd:{ title:L3('Medir','Measure','Medir'), sub:measureSub() }, body:h };
+  return { hd:{ title:L3('Medir','Measure','Medir'), sub:measureSub() }, left:left, right:h };
 }
 
 function pointCard(i){
@@ -222,7 +222,7 @@ function pointCard(i){
   h+=F('η motor',b+'etaM','num',{suf:'%',ph:fmtIn(etaMotorDefault(S))});
   h+=UP('Q',L3('Unidad de caudal','Flow unit','Unidade de vazão'))+UP('P',L3('Unidad de presión','Pressure unit','Unidade de pressão'));
   h+='</div><div class="prev" id="pp-'+i+'" aria-live="polite" style="margin-top:14px"></div>';
-  h+='<details class="od"'+(vibEval(S,p).n?' open':'')+'><summary>Vibración · ISO 20816-3 <span class="mut" style="font-weight:400">(mm/s RMS)</span></summary>'+vibGridHTML(i)+'<div class="prev" id="vp-'+i+'" aria-live="polite" style="margin-top:10px"></div><div class="hint">En cada apoyo (carcasa del cojinete): horizontal y vertical; axial solo en el lado acople. Mida con el equipo estable en este punto de operación.</div></details>';
+  h+='<details class="od"'+(vibEval(S,p).n?' open':'')+'><summary><span>Vibración · ISO 20816-3 <span class="mut" style="font-weight:400">(mm/s RMS)</span></span></summary>'+vibGridHTML(i)+'<div class="prev" id="vp-'+i+'" aria-live="polite" style="margin-top:10px"></div><div class="hint">En cada apoyo (carcasa del cojinete): horizontal y vertical; axial solo en el lado acople. Mida con el equipo estable en este punto de operación.</div></details>';
   h+='<details class="od"'+((p.etaRef||p.Href||p.NPSHr||p.obs)?' open':'')+'><summary>Datos opcionales de la curva y observaciones</summary><div class="fgrid">'+
     F('η curva fabricante (agua)',b+'etaRef','num',{suf:'%',hint:'A este mismo caudal'})+
     F('H curva fabricante (agua)',b+'Href','num',{suf:'m'})+
@@ -280,7 +280,7 @@ function vEquip(){
     UP('D','Unidad de diámetro')+'</div></section>';
   h+='<section class="card"><h3>Vibración · ISO 20816-3</h3><div id="vibBox">'+vibBoxHTML()+'</div></section>';
   h+='<button type="button" class="btn primary" data-act="back" data-v="measure">'+L3('Listo','Done','Pronto')+'</button>';
-  return { hd:{ title:L3('Equipo','Equipment','Equipamento'), sub:subLine(), back:'measure' }, body:h };
+  return { hd:{ title:L3('Equipo','Equipment','Equipamento'), sub:subLine(), back:'measure' }, body:h, masonry:true };
 }
 
 function curveCardHTML(){
@@ -336,7 +336,7 @@ function vFluid(){
   if(pr.fl) h+='<div class="note warn"><b>Fluido inflamable.</b> Trabaje solo en zonas seguras o con equipos certificados para área clasificada (ATEX / IECEx, Clase I Div. 1/2). Un teléfono normal no lo está.</div>';
   if(pr.vol) h+='<div class="note warn"><b>Fluido volátil.</b> Ingrese la presión de vapor real (RVP o curva del fluido) para evaluar el NPSH disponible y el riesgo de cavitación.</div>';
   h+='<button type="button" class="btn primary" data-act="back" data-v="measure">'+L3('Listo','Done','Pronto')+'</button>';
-  return { hd:{ title:'Fluido bombeado', sub:esc(pr.n), back:'measure' }, body:h };
+  return { hd:{ title:'Fluido bombeado', sub:esc(pr.n), back:'measure' }, body:h, masonry:true };
 }
 
 /* ---- Vibración: interfaz ---- */
@@ -434,6 +434,7 @@ function gaugeSVG(eta, mark, markLabel, aria){
     s+='<path class="zn '+z[2]+'" d="M'+xy(P(a,r))+' A'+r+' '+r+' 0 0 1 '+xy(P(b,r))+'"/>';
   });
   [0].concat(GAUGE_ZONES.map(function(z){ return z[1]; })).forEach(function(v){
+    if(mark>0 && v>0 && v<100 && Math.abs(v-mark)<6) return;   // la marca de referencia tapa el número
     var q=P(v,v===0||v===100?r:r-26); s+='<text class="tk" x="'+q[0].toFixed(1)+'" y="'+(v===0||v===100?cy+22:q[1]+4).toFixed(1)+'" text-anchor="middle">'+v+'</text>';
   });
   if(mark>0){
@@ -605,6 +606,7 @@ function vResult(){
     kcard(L3('Caudal','Flow','Vazão'), fq(R.Q), esc(unitLabel('Q')), R.qr!==undefined ? f(R.qr*100,0)+' % '+L3('del BEP','of BEP','do BEP') : '')+
     kcard(L3('Potencia','Power','Potência'), f(R.Pe,1), 'kW', L3('eléctrica · eje ','electrical · shaft ','elétrica · eixo ')+f(R.Peje,1)+' kW')+
     vibCard(c.vib[ui.sel])+saveCard(R)+'</div>';
+  var top=h; h='';
   var notes=[];
   if(R.inUnc) notes.push({k:'info', t:'La diferencia con la referencia está dentro de la incertidumbre estimada de la medición: repita o mejore la medición antes de concluir.'});
   notes=notes.concat(R.warns);
@@ -613,6 +615,7 @@ function vResult(){
   var ch=effChartSVG(c.good, R);
   h+='<section class="card r18"><h3><span>'+L3('Eficiencia frente a caudal','Efficiency vs. flow','Eficiência versus vazão')+'</span></h3>'+(ch||'<p class="hint" style="margin:0">'+L3('Cargue la curva del fabricante (Medir › Equipo) o mida dos puntos o más para ver el gráfico.','Enter the manufacturer curve (Measure › Equipment) or measure two or more points to see the chart.','Cadastre a curva do fabricante (Medir › Equipamento) ou meça dois pontos ou mais para ver o gráfico.')+'</p>')+'</section>';
   h+=actionsHTML();
+  var left=h; h='';
   h+='<h2 class="sh">'+L3('Detalle','Details','Detalhes')+'</h2>';
   h+='<section class="card"><div class="hl"><span>'+L3('Eficiencia de la bomba','Pump efficiency','Eficiência da bomba')+'</span><b>'+f(R.eta,1)+' % <small>± '+f(R.U,1)+' pts (estimada)</small></b></div>'+
     '<div class="hl"><span>Referencia</span><b>'+rf.v+'<small>'+esc(trHTML(rf.s))+'</small></b></div>'+
@@ -635,7 +638,7 @@ function vResult(){
   if(R.status.k!=='ok'){
     h+='<details class="acc"><summary>Qué inspeccionar primero</summary><div class="ab"><ul class="cl">'+CAUSAS[S.pump.tipo].concat(CAUSAS_COMUN).map(function(t){ return '<li>'+esc(t)+'</li>'; }).join('')+'</ul></div></details>';
   }
-  return { hd:hd, body:h };
+  return { hd:hd, top:top, left:left, right:h };
 }
 
 /* ===================== HISTORIAL ===================== */
@@ -691,8 +694,7 @@ function vHistory(){
   var h='<label class="search"><span class="sr">'+L3('Buscar en el historial','Search history','Buscar no histórico')+'</span>'+ico('search')+'<input type="search" id="hq" value="'+esc(ui.q)+'" placeholder="'+L3('Buscar por TAG, fecha o empresa','Search by TAG, date or company','Buscar por TAG, data ou empresa')+'" autocomplete="off"></label>';
   if(tags.length) h+='<div class="chips" role="group" aria-label="'+L3('Equipos','Units','Equipamentos')+'"><button type="button" class="pc txt" data-act="htag" data-v="" aria-pressed="'+(ui.htag===null)+'">'+L3('Todos','All','Todos')+'</button>'+
     tags.map(function(t){ return '<button type="button" class="pc" data-act="htag" data-v="'+esc(t)+'" data-set="1" aria-pressed="'+(ui.htag===t)+'">'+(esc(t)||'Sin TAG')+'</button>'; }).join('')+'</div>';
-  h+='<div id="htrend">'+(hist.length?trendHTML():'')+'</div><div id="hlist">'+histListHTML()+'</div>';
-  return { hd:{ title:L3('Historial','History','Histórico'), sub:hist.length===1 ? L3('1 evaluación guardada en este dispositivo','1 evaluation saved on this device','1 avaliação salva neste dispositivo') : L3(hist.length+' evaluaciones guardadas en este dispositivo',hist.length+' evaluations saved on this device',hist.length+' avaliações salvas neste dispositivo') }, body:h };
+  return { top:h, left:'<div id="htrend">'+(hist.length?trendHTML():'')+'</div>', right:'<div id="hlist">'+histListHTML()+'</div>', hd:{ title:L3('Historial','History','Histórico'), sub:hist.length===1 ? L3('1 evaluación guardada en este dispositivo','1 evaluation saved on this device','1 avaliação salva neste dispositivo') : L3(hist.length+' evaluaciones guardadas en este dispositivo',hist.length+' evaluations saved on this device',hist.length+' avaliações salvas neste dispositivo') }, body:h };
 }
 
 /* ===================== AJUSTES ===================== */
@@ -744,7 +746,7 @@ function vSettings(){
     '<button type="button" class="btn blue block" data-act="install" id="btnInstall" hidden style="margin-bottom:10px">Instalar en el teléfono</button>'+
     '<div class="btnrow" style="margin-bottom:10px"><button type="button" class="btn" data-act="demo">'+L3('Ejemplo: una bomba','Example: one pump','Exemplo: uma bomba')+'</button><button type="button" class="btn" data-act="demoSys">'+L3('Ejemplo: 2 en paralelo','Example: 2 in parallel','Exemplo: 2 em paralelo')+'</button></div>'+
     '<div class="btnrow"><button type="button" class="btn" data-act="newEval">Nueva evaluación</button><button type="button" class="btn danger" data-act="wipe">Borrar todo</button></div></section>';
-  return { hd:{ title:L3('Ajustes','Settings','Ajustes'), sub:L3('Idioma, unidades, guía y datos','Language, units, guide and data','Idioma, unidades, guia e dados') }, body:h };
+  return { hd:{ title:L3('Ajustes','Settings','Ajustes'), sub:L3('Idioma, unidades, guía y datos','Language, units, guide and data','Idioma, unidades, guia e dados') }, body:h, masonry:true };
 }
 
 /* ===================== SISTEMAS DE VARIAS BOMBAS ===================== */
@@ -966,6 +968,7 @@ function vSysResult(){
       (g.costYear!==undefined?'<span class="k-v">'+nInt(g.costYear)+'</span><span class="k-s">'+nInt(g.kwhYear)+' kWh'+L3('/año','/yr','/ano')+'</span>':
        g.kwhYear!==undefined?'<span class="k-v">'+nInt(g.kwhYear)+'<small>kWh</small></span><span class="k-s">'+L3('Cargue el precio del kWh en Ajustes','Enter the kWh price in Settings','Informe o preço do kWh em Ajustes')+'</span>':
        '<span class="k-v">—</span><span class="k-s">'+L3('Cargue horas y precio en Ajustes','Enter hours and price in Settings','Informe horas e preço em Ajustes')+'</span>')+'</div></div>';
+  var top=h; h='';
   if(R.est) h+='<div class="note est"><span class="tag-est">'+L3('Estimación','Estimate','Estimativa')+'</span> '+L3('Caudal total medido: ','Measured total flow: ','Vazão total medida: ')+fq(g.Q)+' '+esc(unitLabel('Q'))+'. '+L3('El reparto entre bombas se estimó con las curvas H–Q; las eficiencias por bomba son estimadas.','The split between pumps was estimated from the H–Q curves; per-pump efficiencies are estimates.','A divisão entre bombas foi estimada com as curvas H–Q; as eficiências por bomba são estimadas.')+'</div>';
   h+=errs+R.warns.map(function(w){ return '<div class="note '+(w.k==='info'?'':w.k)+'">'+esc(trHTML(w.t))+'</div>'; }).join('');
   h+='<section class="card flush plist"><h3 style="padding:14px 14px 0;margin:0 0 4px">'+L3('Por bomba','Per pump','Por bomba')+'</h3>'+R.pumps.map(function(e){
@@ -976,11 +979,12 @@ function vSysResult(){
   }).join('')+'</section>';
   h+='<section class="card r18"><h3><span>'+L3('Altura frente a caudal','Head vs. flow','Altura versus vazão')+'</span></h3>'+sysChartSVG(R)+'</section>';
   h+=actionsHTML();
+  var left=h; h='';
   h+='<h2 class="sh">'+L3('Detalle','Details','Detalhes')+'</h2>';
   h+='<details class="acc" open><summary>'+L3('Tabla por bomba','Per-pump table','Tabela por bomba')+'</summary><div class="tw">'+sysTableHTML(R)+'</div></details>';
   h+='<details class="acc"><summary>'+L3('Energía y costo','Energy and cost','Energia e custo')+'</summary><div class="ab"><div class="fgrid">'+F('Costo de la energía (por kWh)','econ.price','num',{suf:'',ph:fmtIn(0.10)})+F('Horas de operación al año','econ.hours','num',{suf:'h'})+'</div>'+
     '<div class="hint" style="margin-top:10px">'+L3('Costo anual = potencia eléctrica total × horas × precio. η del grupo = Σ potencia hidráulica / Σ potencia al eje.','Annual cost = total electrical power × hours × price. Group η = Σ hydraulic power / Σ shaft power.','Custo anual = potência elétrica total × horas × preço. η do grupo = Σ potência hidráulica / Σ potência no eixo.')+'</div></div></details>';
-  return { hd:hd, body:h };
+  return { hd:hd, top:top, left:left, right:h };
 }
 function sysTableHTML(R){
   var g=R.g, uP=esc(unitLabel('P'));
@@ -1088,6 +1092,12 @@ function applyLangStatic(){
   $nav.setAttribute('aria-label', trHTML(L3('Secciones','Sections','Seções')));
   $nav.innerHTML = trHTML(navHTML());
 }
+// Vistas en columnas: { top, left, right } (en el celular se apilan en ese orden) o { body, masonry }
+function layoutHTML(v){
+  if(v.left!==undefined || v.right!==undefined)
+    return (v.top?'<div class="lay-top">'+v.top+'</div>':'')+'<div class="cols"><div class="col">'+(v.left||'')+'</div><div class="col">'+(v.right||'')+'</div></div>';
+  return v.masonry ? '<div class="masonry">'+v.body+'</div>' : v.body;
+}
 function applyDL(){ document.querySelectorAll('[data-dl]').forEach(function(b){ b.hidden=!DL; }); }
 var lastView=null;
 function render(o){
@@ -1095,7 +1105,7 @@ function render(o){
   var key=ui.sub||ui.tab, v=VIEWS[key]();
   lastView=v;
   $hd.innerHTML=trHTML(headerHTML(v.hd));
-  $main.innerHTML=trHTML(v.body);
+  $main.innerHTML=trHTML(layoutHTML(v));
   $main.classList.toggle('enter', !!o.enter);
   document.body.classList.toggle('animate', !!o.animate);
   $nav.innerHTML=trHTML(navHTML());

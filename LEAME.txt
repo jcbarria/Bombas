@@ -23,6 +23,8 @@ QUÉ HACE
   - Historial: buscador, filtro por equipo, tendencia del equipo y estado Bien / Atención / Revisar.
   - Ajustes: idioma (español, inglés, portugués), tema claro/oscuro, unidades, costo de la energía,
     incertidumbre, guía de medición, normas, fórmulas, datos de ejemplo y borrado.
+  - En computadora o tableta apaisada (pantallas de 960 px o más) la navegación pasa a una barra
+    lateral y el contenido se ordena en dos columnas. En el celular se ve igual que antes.
 
 SISTEMAS DE 2 A 8 BOMBAS (nuevo)
 --------------------------------
