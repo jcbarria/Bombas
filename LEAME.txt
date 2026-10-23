@@ -1,15 +1,61 @@
 EFICIENCIA DE BOMBAS - APP INSTALABLE PARA ANDROID (funciona sin conexión)
 =====================================================================
 
-Contenido de esta carpeta (suba TODOS los archivos, sin cambiar los nombres):
-  index.html, manifest.webmanifest, sw.js, icon-192.png, icon-512.png, icon-maskable-512.png
+Contenido de esta carpeta (suba TODOS los archivos y carpetas, sin cambiar los nombres):
+  index.html, styles.css, core.js, i18n.js, app.js, sw.js, manifest.webmanifest,
+  icon-192.png, icon-512.png, icon-maskable-512.png
+  fonts/   (fuentes IBM Plex Sans y Plex Mono, locales; licencia en fonts/OFL.txt)
+No hacen falta para que la app funcione: tests/ (pruebas) y docs/ (capturas).
+
+QUÉ HACE
+--------
+  - Pestañas: Medir, Resultado, Historial y Ajustes.
+  - Medir: arreglo de bombas (Individual, Paralelo, Serie o Mixto), punto N de M, equipo y fluido
+    (filas que abren su pantalla) y las lecturas: caudal, presiones, potencia eléctrica (V·I·cos φ o
+    kW directos), η del motor, vibración ISO 20816-3 y datos opcionales de la curva.
+    Los números aceptan coma o punto decimal.
+  - Equipo: identificación, tipo de bomba, rango de potencia, datos de placa, CURVA DEL FABRICANTE
+    (nuevo, opcional: tabla de caudal, altura y eficiencia con agua) e instalación.
+  - Resultado: medidor de eficiencia con la referencia (placa, curva o rango típico), caudal,
+    potencia, vibración, ahorro potencial, gráfico de eficiencia vs. caudal (curva del fabricante,
+    curva corregida por viscosidad y punto medido), detalle, guardar, copiar, CSV, informe y
+    «Compartir informe» (WhatsApp, correo, etc.).
+  - Historial: buscador, filtro por equipo, tendencia del equipo y estado Bien / Atención / Revisar.
+  - Ajustes: idioma (español, inglés, portugués), tema claro/oscuro, unidades, costo de la energía,
+    incertidumbre, guía de medición, normas, fórmulas, datos de ejemplo y borrado.
+
+SISTEMAS DE 2 A 8 BOMBAS (nuevo)
+--------------------------------
+  1. En Medir elija el arreglo: Paralelo, Serie o Mixto (trenes en paralelo; en cada tren, bombas en serie).
+  2. Cada bomba (P-1, P-2...) tiene su propia placa, curva y lecturas. Use + y − para agregar o quitar
+     bombas y «Copiar datos de P-1» si son iguales (copia placa, curva e instalación, no las lecturas).
+  3. Precargas editables: en serie la succión de cada bomba toma la descarga de la anterior (y el
+     caudal común); en paralelo la descarga toma la de P-1.
+  4. Paralelo con solo el caudal total: elija «Solo el total». El reparto entre bombas es una
+     ESTIMACIÓN con las curvas H-Q (hace falta la curva de todas las bombas) y queda rotulado así.
+  5. Resultado: eficiencia del grupo = suma de potencias hidráulicas / suma de potencias al eje;
+     energía específica (kWh/m³) = potencia eléctrica total / caudal del grupo; costo anual con las
+     horas y el precio de Ajustes. Lista por bomba (η, kW, % del caudal de mejor eficiencia, estado)
+     y gráfico de altura vs. caudal con las curvas individuales y la combinada.
+  6. Avisos: caudales en serie o descargas en paralelo que difieren más de 5 %, descarga menor o
+     igual que la succión, eficiencia mayor a 100 % y bombas fuera de 70-120 % de su caudal BEP.
+  7. El historial guarda el sistema como un solo registro con el detalle por bomba. El CSV tiene una
+     fila por bomba y una del grupo.
+
+Sobre la potencia: la app mide potencia ELÉCTRICA y la convierte a potencia al eje con el η del
+motor y de la transmisión. Si usted ya tiene la potencia al eje, cárguela en «kW directos» y ponga
+η motor = 100 %.
+
+DATOS DE EJEMPLO
+  En Ajustes › Datos hay dos ejemplos (una bomba y dos bombas en paralelo). Son datos ficticios:
+  quedan marcados como «Ejemplo» en la pantalla, el historial, el CSV y el informe.
 
 PARTE 1 - Publicar la app (una sola vez, con internet, gratis)
 --------------------------------------------------------------
 Opción A: GitHub Pages
   1. Cree una cuenta gratuita en github.com.
   2. New repository. Nombre: bombas. Público (Public). Create repository.
-  3. Enlace "uploading an existing file". Arrastre los 6 archivos. Commit changes.
+  3. Enlace "uploading an existing file". Arrastre los archivos y la carpeta fonts. Commit changes.
   4. Settings > Pages > Source: "Deploy from a branch" > Branch: main / (root) > Save.
   5. Espere 1-2 minutos. La app queda en:  https://SU-USUARIO.github.io/bombas/
 
@@ -29,9 +75,14 @@ PARTE 2 - Instalar en el Android (con internet, una sola vez)
 
 Desde ese momento funciona sin señal en el campo. Cuando el teléfono tenga internet, la app
 se actualiza sola en segundo plano (la nueva versión se ve al abrirla otra vez).
+Los datos y el historial de la versión anterior se conservan.
 
 PARA ACTUALIZAR LA APP
-  Suba el nuevo index.html al mismo lugar y cambie el número en sw.js (bombas-v3 > bombas-v2).
+  Suba los archivos nuevos al mismo lugar y suba el número en sw.js (por ejemplo bombas-v5 > bombas-v6).
+  Si agrega un archivo nuevo, inclúyalo también en la lista ASSETS de sw.js.
+
+PRUEBAS (para quien mantiene el código)
+  node tests/calc.test.js     (sin dependencias; verifica los cálculos de paralelo, serie y validaciones)
 
 NOTA DE SEGURIDAD
   No use el teléfono en áreas clasificadas (atmósfera explosiva) salvo que esté certificado.
