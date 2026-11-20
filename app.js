@@ -231,12 +231,12 @@ function pointCard(i){
   h+=F('Ps aspiración',b+'Ps','P',{neg:true,hint:prefillHint(i,'Ps'),hintCls:'pre'})+F('Pd impulsión',b+'Pd','P',{hint:prefillHint(i,'Pd'),hintCls:'pre'});
   if(S.mode==='vi') h+=F('V tensión de línea',b+'V','num',{suf:'V'})+F('I corriente',b+'I','num',{suf:'A'})+F('cos φ',b+'cos','num',{suf:'',ph:fmtIn(0.85)});
   else h+=F('P eléctrica (kW medidos)',b+'kW','num',{suf:'kW'});
-  h+=F('η motor',b+'etaM','num',{suf:'%',ph:fmtIn(etaMotorDefault(S))});
+  h+=F(L3('Rendimiento motor','Motor efficiency','Rendimento motor'),b+'etaM','num',{suf:'%',ph:fmtIn(etaMotorDefault(S))});
   h+=UP('Q',L3('Unidad de caudal','Flow unit','Unidade de vazão'))+UP('P',L3('Unidad de presión','Pressure unit','Unidade de pressão'));
   h+='</div><div class="prev" id="pp-'+i+'" aria-live="polite" style="margin-top:14px"></div>';
   h+='<details class="od"'+(vibEval(S,p).n?' open':'')+'><summary><span>Vibración · ISO 20816-3 <span class="mut" style="font-weight:400">(mm/s RMS)</span></span></summary>'+vibGridHTML(i)+'<div class="prev" id="vp-'+i+'" aria-live="polite" style="margin-top:10px"></div><div class="hint">En cada apoyo (carcasa del cojinete): horizontal y vertical; axial solo en el lado acople. Mida con el equipo estable en este punto de operación.</div></details>';
   h+='<details class="od"'+((p.etaRef||p.Href||p.NPSHr||p.obs)?' open':'')+'><summary>Datos opcionales de la curva y observaciones</summary><div class="fgrid">'+
-    F('η curva fabricante (agua)',b+'etaRef','num',{suf:'%',hint:'A este mismo caudal'})+
+    F(L3('Rendimiento curva fabricante (agua)','Efficiency, manufacturer curve (water)','Rendimento curva do fabricante (água)'),b+'etaRef','num',{suf:'%',hint:'A este mismo caudal'})+
     F('H curva fabricante (agua)',b+'Href','num',{suf:'m'})+
     F('NPSHr de la curva',b+'NPSHr','num',{suf:'m'})+
     F('Observaciones',b+'obs','txt',{cls:'span2',ph:'Válvula al 70 %, vibración normal…'})+'</div></details>';
@@ -282,9 +282,9 @@ function vEquip(){
     F('Velocidad','pump.rpm','num',{suf:'rpm',ph:'2950'})+
     F('Caudal en el BEP (agua)','pump.Qbep','Q',{})+
     F('Altura en el BEP (agua, total)','pump.Hbep','num',{suf:'m'})+
-    F('η de la bomba en el BEP (agua)','pump.etaBep','num',{suf:'%'})+
-    F('η del motor (curva o placa)','pump.etaMdef','num',{suf:'%',ph:fmtIn(etaMotorDefault(S)),id:'etaMdef'})+
-    F('η de la transmisión','pump.etaT','num',{suf:'%',ph:'100',hint:'100 % = acople directo'})+
+    F(L3('Rendimiento de la bomba en el BEP (agua)','Pump efficiency at BEP (water)','Rendimento da bomba no BEP (água)'),'pump.etaBep','num',{suf:'%'})+
+    F(L3('Rendimiento del motor (curva o placa)','Motor efficiency (curve or nameplate)','Rendimento do motor (curva ou placa)'),'pump.etaMdef','num',{suf:'%',ph:fmtIn(etaMotorDefault(S)),id:'etaMdef'})+
+    F(L3('Rendimiento de la transmisión','Transmission efficiency','Rendimento da transmissão'),'pump.etaT','num',{suf:'%',ph:'100',hint:'100 % = acople directo'})+
     '<div class="span2 hint">Con la curva del fabricante la evaluación es mucho más confiable. Sin ella, la app compara con un rango típico para el tipo y la potencia elegidos. El η de motor por defecto es orientativo: sustitúyalo por el valor de placa o curva a la carga real.</div></div></section>';
   h+=curveCardHTML();
   h+='<section class="card"><h3>Instalación</h3><div class="fgrid">'+
@@ -998,7 +998,7 @@ function vSettings(){
     F('Fondo de escala del manómetro','unc.FS','P',{})+
     F('Potencia eléctrica (± %)','unc.W','num',{suf:'%'})+
     F('Densidad (± %)','unc.rho','num',{suf:'%'})+
-    F('η del motor (± puntos)','unc.etaM','num',{suf:'pts'})+'</div>'+
+    F(L3('Rendimiento del motor (± puntos)','Motor efficiency (± points)','Rendimento do motor (± pontos)'),'unc.etaM','num',{suf:'pts'})+'</div>'+
     '<div class="hint" style="margin-top:8px">Valores típicos: caudalímetro ultrasónico clamp-on 1–3 %, manómetro clase 0.5–1, transmisor 0.1–0.25, analizador de red 0.5–1. La incertidumbre se combina como raíz de la suma de cuadrados.</div></div></details>';
   h+='<details class="acc"><summary>Guía de medición (lista de verificación)</summary><div class="ab">'+
     GUIDE.map(function(g){ return '<div class="gh">'+g[0]+'</div>'+g[1].map(function(s){ return '<label class="chk"><input type="checkbox" data-chk="'+s[0]+'"'+(S.checks[s[0]]?' checked':'')+'><span><b>'+s[0]+'. '+s[1]+'</b><small>'+(Array.isArray(s[2])?L3.apply(null,s[2]):s[2])+'</small></span></label>'; }).join(''); }).join('')+'</div></details>';
