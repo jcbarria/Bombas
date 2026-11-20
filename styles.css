@@ -575,6 +575,11 @@ body::before{ content:''; position:fixed; inset:0; z-index:-1; pointer-events:no
   .nav button[aria-current="page"]:hover{ color:var(--on-pill); background-color:var(--pill-hover); }
   .hd .ib:hover, .ptbar .ib:hover:not([disabled]){ background-color:var(--hover); }
 }
+/* Resaltado al pasar el mouse con la misma forma redondeada que su panel */
+details.acc > summary{ border-radius:24px; }
+details.acc[open] > summary{ border-radius:24px 24px 0 0; }
+.hrow .hdel, .cv .ib{ border-radius:50%; }
+
 /* Prolijidad: todo el contenido dentro de su panel y alineado con el texto del panel */
 .card.chk{ padding:14px 16px; align-items:center; }                   /* «Mantener la pantalla encendida» */
 .card.chk:first-child{ border-top:1px solid var(--glass-line); }

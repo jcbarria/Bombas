@@ -332,8 +332,8 @@ function gpsCardHTML(){
   return '<section class="card" id="gpsCard"><h3><span>'+L3('Ubicación GPS','GPS location','Localização GPS')+'</span><small>'+L3('opcional','optional','opcional')+'</small></h3>'+
     '<button type="button" class="btn sm block" data-act="gps" id="gpsBtn">'+ico('pin')+L3('Usar mi ubicación actual','Use my current location','Usar minha localização atual')+'</button>'+
     '<div class="fgrid" style="margin-top:12px">'+
-      F(L3('Latitud','Latitude','Latitude'),'meta.lat','coord',{suf:'°',neg:true,ph:fmtCoord(-34.603722)})+
-      F(L3('Longitud','Longitude','Longitude'),'meta.lng','coord',{suf:'°',neg:true,ph:fmtCoord(-58.381592)})+'</div>'+
+      F(L3('Latitud','Latitude','Latitude'),'meta.lat','coord',{suf:'°',neg:true,cls:'span2',ph:fmtCoord(-34.603722)})+
+      F(L3('Longitud','Longitude','Longitude'),'meta.lng','coord',{suf:'°',neg:true,cls:'span2',ph:fmtCoord(-58.381592)})+'</div>'+
     '<div id="gpsInfo" style="margin-top:10px">'+gpsInfoHTML()+'</div></section>';
 }
 function gpsInfoHTML(){
