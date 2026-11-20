@@ -95,8 +95,8 @@ PARTE 2 - Instalar en el Android (con internet, una sola vez)
   3. Abra la app desde el icono nuevo, con conexión, y espere unos segundos.
   4. Prueba: ponga el teléfono en modo avión y abra la app desde el icono. Debe abrir y calcular.
 
-Desde ese momento funciona sin señal en el campo. Cuando el teléfono tenga internet, la app
-se actualiza sola en segundo plano (la nueva versión se ve al abrirla otra vez).
+Desde ese momento funciona sin señal en el campo. Con internet, la app carga siempre la última
+versión publicada y la guarda; sin señal (o si la red tarda más de 3 segundos) usa la copia guardada.
 Los datos y el historial de la versión anterior se conservan.
 
 PARA ACTUALIZAR LA APP

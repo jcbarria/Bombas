@@ -575,6 +575,11 @@ body::before{ content:''; position:fixed; inset:0; z-index:-1; pointer-events:no
   .nav button[aria-current="page"]:hover{ color:var(--on-pill); background-color:var(--pill-hover); }
   .hd .ib:hover, .ptbar .ib:hover:not([disabled]){ background-color:var(--hover); }
 }
+/* Sin el rectángulo de toque que dibuja Android/iOS sobre títulos, filas y etiquetas */
+html{ -webkit-tap-highlight-color:transparent; }
+/* Al apretar (dedo o mouse): mismo resaltado redondeado que al pasar el mouse */
+details.acc > summary:active, details.od > summary:active, .row:active, .opt:active, .hrow .hmain:active{ background-color:var(--hover); }
+details.od > summary{ border-radius:14px; padding-left:8px; padding-right:8px; margin:0 -8px; }
 /* Resaltado al pasar el mouse con la misma forma redondeada que su panel */
 details.acc > summary{ border-radius:24px; }
 details.acc[open] > summary{ border-radius:24px 24px 0 0; }
