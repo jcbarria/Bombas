@@ -303,7 +303,7 @@ function curveCardHTML(){
     'Points from the data sheet (water). Used for the chart, as the η and H reference when a measured point has no value of its own, and to combine pumps in series or parallel.',
     'Pontos da folha de dados (com água). Usados no gráfico, como referência de η e H quando o ponto medido não tem dado próprio, e para combinar bombas em série ou paralelo.')+'</p>';
   if(rows.length){
-    h+='<div class="cv"><span class="vh">Q ('+esc(unitLabel('Q'))+')</span><span class="vh">H (m)</span><span class="vh">η (%)</span><span></span>';
+    h+='<div class="cv"><span class="vh">Q ('+esc(unitLabel('Q'))+')</span><span class="vh">H (m)</span><span class="vh">'+L3('Rendimiento (%)','Efficiency (%)','Rendimento (%)')+'</span><span></span>';
     rows.forEach(function(r,k){
       var b='pump.curve.'+k+'.', n=k+1;
       h+='<span class="fi">'+inputHTML(b+'Q','Q',{aria:L3('Caudal, fila '+n,'Flow, row '+n,'Vazão, linha '+n)})+'</span>'+
@@ -918,7 +918,7 @@ function vResult(){
     (R.load!==undefined?m('Carga del motor',f(R.load,0),'%'):'')+(R.qr!==undefined?m('Q / Q BEP',f(R.qr*100,0),'%'):'')+
     (R.NPSHa!==undefined?m('NPSH disponible',f(R.NPSHa,1),'m'):'')+(R.hdev!==undefined?m('Altura vs curva',fsg(R.hdev,1),'%'):'')+'</div></section>';
   h+=vibSectionHTML(c);
-  h+='<details class="acc"'+(c.pts.length>1?' open':'')+'><summary>Todos los puntos</summary><div class="tw"><table><thead><tr><th>Punto</th><th>Q ('+esc(unitLabel('Q'))+')</th><th>H (m)</th><th>Ph (kW)</th><th>Pe (kW)</th><th>η bomba</th><th>η global</th><th>kWh/m³</th><th>Desv.</th><th>Estado</th></tr></thead><tbody>'+
+  h+='<details class="acc"'+(c.pts.length>1?' open':'')+'><summary>Todos los puntos</summary><div class="tw"><table><thead><tr><th>Punto</th><th>Q ('+esc(unitLabel('Q'))+')</th><th>H (m)</th><th>Ph (kW)</th><th>Pe (kW)</th><th>'+L3('Rendimiento bomba','Pump efficiency','Rendimento bomba')+'</th><th>'+L3('Rendimiento global','Overall efficiency','Rendimento global')+'</th><th>kWh/m³</th><th>Desv.</th><th>Estado</th></tr></thead><tbody>'+
     c.pts.map(function(r,i){ if(!r.ok) return '<tr><td>'+(i+1)+'</td><td colspan="9" style="text-align:left;font-family:var(--sans)" class="mut">'+(r.error?esc(trHTML(r.error)):'Incompleto: '+esc(r.missing.join(', ')))+'</td></tr>';
       return '<tr><td>'+(i+1)+'</td><td>'+fq(r.Q)+'</td><td>'+f(r.H,1)+'</td><td>'+f(r.Ph,1)+'</td><td>'+f(r.Pe,1)+'</td><td><b>'+f(r.eta,1)+' %</b></td><td>'+f(r.etaG,1)+' %</td><td>'+f(r.Eesp,3)+'</td><td>'+(r.src!=='band'?fsg(r.dev,1):'—')+'</td><td>'+stShort(r.status.k)+'</td></tr>'; }).join('')+
     '</tbody></table></div>'+(c.good.length>1?'<div class="ab"><div class="note">Promedio de '+c.good.length+' puntos: η bomba <b>'+f(c.etaAvg,1)+' %</b> · η global <b>'+f(c.etaGAvg,1)+' %</b> · energía específica <b>'+f(c.eespAvg,3)+' kWh/m³</b>.</div></div>':'')+'</details>';
@@ -1276,7 +1276,7 @@ function vSysResult(){
 }
 function sysTableHTML(R){
   var g=R.g, uP=esc(unitLabel('P'));
-  return '<table><thead><tr><th>'+L3('Bomba','Pump','Bomba')+'</th><th>Q ('+esc(unitLabel('Q'))+')</th><th>ΔP ('+uP+')</th><th>H (m)</th><th>Ph (kW)</th><th>Pe (kW)</th><th>Peje (kW)</th><th>η</th><th>% BEP</th><th>'+L3('Estado','Status','Estado')+'</th></tr></thead><tbody>'+
+  return '<table><thead><tr><th>'+L3('Bomba','Pump','Bomba')+'</th><th>Q ('+esc(unitLabel('Q'))+')</th><th>ΔP ('+uP+')</th><th>H (m)</th><th>Ph (kW)</th><th>Pe (kW)</th><th>Peje (kW)</th><th>'+L3('Rendimiento','Efficiency','Rendimento')+'</th><th>% BEP</th><th>'+L3('Estado','Status','Estado')+'</th></tr></thead><tbody>'+
     R.pumps.map(function(e){ var r=e.r; return '<tr><td>'+pumpLabel(e.k)+'</td><td>'+fq(r.Q)+(e.est?'*':'')+'</td><td>'+f(fromSI('P',e.dP,S),2)+'</td><td>'+f(r.H,1)+'</td><td>'+f(r.Ph,1)+'</td><td>'+f(r.Pe,1)+'</td><td>'+f(r.Peje,1)+'</td><td><b>'+f(r.eta,1)+' %</b></td><td>'+(r.qr!==undefined?f(r.qr*100,0):'—')+'</td><td>'+stShort(r.invalid?'bad':r.status.k)+'</td></tr>'; }).join('')+
     '<tr><td><b>'+L3('Grupo','Group','Grupo')+'</b></td><td><b>'+fq(g.Q)+'</b></td><td>'+(g.dP!==null?f(fromSI('P',g.dP,S),2):'—')+'</td><td>'+f(g.H,1)+'</td><td>'+f(g.Ph,1)+'</td><td>'+f(g.Pe,1)+'</td><td>'+f(g.Peje,1)+'</td><td><b>'+f(g.eta,1)+' %</b></td><td>—</td><td>'+f(g.Eesp,3)+' kWh/m³</td></tr></tbody></table>'+
     (R.est?'<p class="hint" style="padding:0 12px 12px">* '+L3('caudal estimado','estimated flow','vazão estimada')+'</p>':'');
@@ -1644,10 +1644,16 @@ function loadDemo(){
 }
 
 /* ---------- Tema ---------- */
+var THEME_BAR = { light:'#E8E3DC', dark:'#0E1112' };   // color de la barra de estado del teléfono (= fondo)
+var darkMQ = window.matchMedia ? window.matchMedia('(prefers-color-scheme: dark)') : null;
 function applyTheme(){
   var t=store.get('ebp:theme')||'auto';
+  if(['auto','light','dark'].indexOf(t)<0) t='dark';   // valores viejos (p. ej. la prueba «glass»)
   if(t==='auto') document.documentElement.removeAttribute('data-theme'); else document.documentElement.setAttribute('data-theme',t);
+  var eff = t==='auto' ? (darkMQ && darkMQ.matches ? 'dark' : 'light') : t;
+  var m=document.querySelector('meta[name="theme-color"]'); if(m) m.setAttribute('content', THEME_BAR[eff]);
 }
+if(darkMQ){ try{ darkMQ.addEventListener('change', applyTheme); }catch(e){ if(darkMQ.addListener) darkMQ.addListener(applyTheme); } }
 applyTheme();
 
 /* ---------- Inicio ---------- */

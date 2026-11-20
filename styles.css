@@ -9,40 +9,76 @@
 @font-face{ font-family:'IBM Plex Mono'; font-style:normal; font-weight:500; font-display:swap; src:url(fonts/ibm-plex-mono-latin-500-normal.woff2) format('woff2'); }
 @font-face{ font-family:'IBM Plex Mono'; font-style:normal; font-weight:600; font-display:swap; src:url(fonts/ibm-plex-mono-latin-600-normal.woff2) format('woff2'); }
 
+/* Diseño «Vidrio»: paneles translúcidos sobre un fondo de luces difuminadas.
+   Claro (abajo) u oscuro (más abajo); se elige en Ajustes › Apariencia. */
 :root{
-  --blue-700:#0B4F6C; --blue-900:#073B52; --accent:#F26B21; --on-accent:#1A0B00;
-  --bg:#F6F8F9; --card:#FFFFFF; --line:#E3E9ED; --ink:#0E1B24; --muted:#566673;
+  --blue-700:#1E7C6E; --blue-900:#165E54; --accent:#1C9480; --on-accent:#FFFFFF;
+  --bg:transparent; --card:rgba(255,255,255,.58); --line:rgba(24,34,31,.10); --ink:#14201D; --muted:#53615D;
   --z-bad:#E5484D; --z-mid:#F5A524; --z-good:#30A46C;
   /* Variantes para texto (contraste ≥ 4.5:1 sobre tarjeta y fondo) */
-  --t-bad:#C0282E; --t-mid:#8A5300; --t-good:#1D7A4C;
-  --tint-bad:#FDECEC; --tint-mid:#FEF3DC; --tint-good:#E6F5EC; --tint-info:#E8F1F5;
-  --save-bg:#FFF1E9; --save-line:#FAD3BC; --save-ink:#A63D06;
-  --field:#FFFFFF; --field-line:#D5DEE4; --ring:rgba(242,107,33,.28);
-  --chart-mfr:#A9B8C3; --chart-grid:#E3E9ED;
+  --t-bad:#B4262C; --t-mid:#855000; --t-good:#1B7048;
+  --tint-bad:rgba(229,72,77,.13); --tint-mid:rgba(245,165,36,.16); --tint-good:rgba(48,164,108,.14); --tint-info:rgba(255,255,255,.55);
+  --save-bg:rgba(28,148,128,.12); --save-line:rgba(28,148,128,.30); --save-ink:#11695A;
+  --field:rgba(255,255,255,.62); --field-line:rgba(24,34,31,.14); --ring:rgba(28,148,128,.30);
+  --chart-mfr:rgba(24,34,31,.40); --chart-grid:rgba(24,34,31,.08);
+  /* Vidrio */
+  --pill:#17211F; --on-pill:#FFFFFF; --pill-hover:#000000; --solid:#FFFFFF; --ri-ink:#1E7C6E;
+  --glass-fill:rgba(255,255,255,.55); --glass-line:rgba(255,255,255,.75); --hover:rgba(255,255,255,.80);
+  --nav-bg:rgba(255,255,255,.62); --mbox-bg:rgba(250,249,246,.88);
+  --glass-sh:inset 0 1px 0 rgba(255,255,255,.65), 0 10px 30px rgba(60,50,40,.10);
+  --bg-base:#E8E3DC;
+  --bg-img:radial-gradient(60% 45% at 12% 8%, rgba(42,157,143,.30), transparent 70%),
+    radial-gradient(55% 50% at 92% 22%, rgba(214,160,100,.42), transparent 70%),
+    radial-gradient(70% 55% at 55% 105%, rgba(160,118,82,.32), transparent 70%),
+    radial-gradient(40% 35% at 30% 60%, rgba(255,255,255,.45), transparent 70%),
+    linear-gradient(180deg,#EDE9E3 0%,#E3DDD5 100%);
   --sans:'IBM Plex Sans',system-ui,-apple-system,'Segoe UI',Roboto,Arial,sans-serif;
   --mono:'IBM Plex Mono',ui-monospace,'SF Mono',Menlo,Consolas,monospace;
   --ease:cubic-bezier(.23,1,.32,1); --t:160ms;
   --nav-h:64px;
   color-scheme:light;
 }
+/* Oscuro: el mismo bloque se aplica en «Automático» con el teléfono en modo oscuro y en «Oscuro» */
 @media (prefers-color-scheme: dark){
   :root:not([data-theme="light"]){
-    --bg:#0D1317; --card:#151D23; --line:rgba(255,255,255,.08); --ink:#E8EEF2; --muted:#9AA9B5;
-    --t-bad:#FF8A8E; --t-mid:#FFC35C; --t-good:#5CCB92;
-    --tint-bad:rgba(229,72,77,.14); --tint-mid:rgba(245,165,36,.14); --tint-good:rgba(48,164,108,.15); --tint-info:rgba(255,255,255,.05);
-    --save-bg:rgba(242,107,33,.12); --save-line:rgba(242,107,33,.34); --save-ink:#FFB58C;
-    --field:#10171C; --field-line:rgba(255,255,255,.14); --ring:rgba(242,107,33,.38);
-    --chart-mfr:#6F8494; --chart-grid:rgba(255,255,255,.08);
+    --accent:#3CC4A8; --on-accent:#04201A;
+    --card:rgba(255,255,255,.065); --line:rgba(255,255,255,.10); --ink:#EEF2F0; --muted:rgba(226,234,231,.66);
+    --t-bad:#FF9A9D; --t-mid:#FFC870; --t-good:#6FE0B4;
+    --tint-bad:rgba(229,72,77,.16); --tint-mid:rgba(245,165,36,.15); --tint-good:rgba(60,196,168,.16); --tint-info:rgba(255,255,255,.07);
+    --save-bg:rgba(60,196,168,.14); --save-line:rgba(60,196,168,.34); --save-ink:#8FF0D3;
+    --field:rgba(0,0,0,.24); --field-line:rgba(255,255,255,.12); --ring:rgba(60,196,168,.35);
+    --chart-mfr:rgba(255,255,255,.42); --chart-grid:rgba(255,255,255,.08);
+    --pill:#F2F5F4; --on-pill:#0E1513; --pill-hover:#FFFFFF; --solid:#191D1E; --ri-ink:#7FE3CC;
+    --glass-fill:rgba(255,255,255,.07); --glass-line:rgba(255,255,255,.12); --hover:rgba(255,255,255,.11);
+    --nav-bg:rgba(24,28,29,.62); --mbox-bg:rgba(28,32,33,.84);
+    --glass-sh:inset 0 1px 0 rgba(255,255,255,.09), 0 10px 30px rgba(0,0,0,.22);
+    --bg-base:#0E1112;
+    --bg-img:radial-gradient(60% 45% at 12% 8%, rgba(42,157,143,.38), transparent 70%),
+      radial-gradient(55% 50% at 92% 22%, rgba(181,124,66,.34), transparent 70%),
+      radial-gradient(70% 55% at 55% 105%, rgba(124,86,56,.42), transparent 70%),
+      radial-gradient(40% 35% at 30% 60%, rgba(90,70,52,.25), transparent 70%),
+      linear-gradient(180deg,#121516 0%,#0E1112 100%);
     color-scheme:dark;
   }
 }
 :root[data-theme="dark"]{
-  --bg:#0D1317; --card:#151D23; --line:rgba(255,255,255,.08); --ink:#E8EEF2; --muted:#9AA9B5;
-  --t-bad:#FF8A8E; --t-mid:#FFC35C; --t-good:#5CCB92;
-  --tint-bad:rgba(229,72,77,.14); --tint-mid:rgba(245,165,36,.14); --tint-good:rgba(48,164,108,.15); --tint-info:rgba(255,255,255,.05);
-  --save-bg:rgba(242,107,33,.12); --save-line:rgba(242,107,33,.34); --save-ink:#FFB58C;
-  --field:#10171C; --field-line:rgba(255,255,255,.14); --ring:rgba(242,107,33,.38);
-  --chart-mfr:#6F8494; --chart-grid:rgba(255,255,255,.08);
+  --accent:#3CC4A8; --on-accent:#04201A;
+  --card:rgba(255,255,255,.065); --line:rgba(255,255,255,.10); --ink:#EEF2F0; --muted:rgba(226,234,231,.66);
+  --t-bad:#FF9A9D; --t-mid:#FFC870; --t-good:#6FE0B4;
+  --tint-bad:rgba(229,72,77,.16); --tint-mid:rgba(245,165,36,.15); --tint-good:rgba(60,196,168,.16); --tint-info:rgba(255,255,255,.07);
+  --save-bg:rgba(60,196,168,.14); --save-line:rgba(60,196,168,.34); --save-ink:#8FF0D3;
+  --field:rgba(0,0,0,.24); --field-line:rgba(255,255,255,.12); --ring:rgba(60,196,168,.35);
+  --chart-mfr:rgba(255,255,255,.42); --chart-grid:rgba(255,255,255,.08);
+  --pill:#F2F5F4; --on-pill:#0E1513; --pill-hover:#FFFFFF; --solid:#191D1E; --ri-ink:#7FE3CC;
+  --glass-fill:rgba(255,255,255,.07); --glass-line:rgba(255,255,255,.12); --hover:rgba(255,255,255,.11);
+  --nav-bg:rgba(24,28,29,.62); --mbox-bg:rgba(28,32,33,.84);
+  --glass-sh:inset 0 1px 0 rgba(255,255,255,.09), 0 10px 30px rgba(0,0,0,.22);
+  --bg-base:#0E1112;
+  --bg-img:radial-gradient(60% 45% at 12% 8%, rgba(42,157,143,.38), transparent 70%),
+    radial-gradient(55% 50% at 92% 22%, rgba(181,124,66,.34), transparent 70%),
+    radial-gradient(70% 55% at 55% 105%, rgba(124,86,56,.42), transparent 70%),
+    radial-gradient(40% 35% at 30% 60%, rgba(90,70,52,.25), transparent 70%),
+    linear-gradient(180deg,#121516 0%,#0E1112 100%);
   color-scheme:dark;
 }
 
@@ -160,8 +196,6 @@ button:active,.btn:active{ transform:scale(.97); }
 .row{ display:flex; align-items:center; gap:12px; width:100%; min-height:60px; padding:10px 14px; border:0; background:transparent; text-align:left; cursor:pointer; }
 .row + .row{ border-top:1px solid var(--line); }
 .row .ri{ width:36px; height:36px; flex:none; border-radius:10px; background:var(--tint-info); display:grid; place-items:center; color:var(--blue-700); }
-:root[data-theme="dark"] .row .ri{ color:#8CC6DF; }
-@media (prefers-color-scheme: dark){ :root:not([data-theme="light"]) .row .ri{ color:#8CC6DF; } }
 .row .ri svg{ width:20px; height:20px; stroke:currentColor; fill:none; stroke-width:1.8; stroke-linecap:round; stroke-linejoin:round; }
 .row .rt{ flex:1; min-width:0; }
 .row .rt b{ display:block; font:500 12px/1.2 var(--sans); letter-spacing:.06em; text-transform:uppercase; color:var(--muted); }
@@ -441,3 +475,113 @@ ul.cl{ margin:4px 0 0; padding-left:20px; } ul.cl li{ margin:5px 0; }
   .big{ font-size:46px; }
 }
 @media print{ .nav,.toast,.ib{ display:none !important; } body{ padding:0; } }
+
+/* =====================================================================
+   DISEÑO «VIDRIO» (claro y oscuro)
+   Paneles translúcidos sobre un fondo de luces difuminadas, botones en píldora y
+   navegación flotante. Los colores salen de las variables de arriba (:root).
+   Rendimiento: el desenfoque real (backdrop-filter) solo se usa en lo que flota
+   sobre el contenido (navegación, diálogo); las tarjetas usan transparencia.
+   ===================================================================== */
+html{ background:var(--bg-base); }
+body{ background:transparent; padding-bottom:calc(var(--nav-h) + 28px + env(safe-area-inset-bottom,0px)); }
+body::before{ content:''; position:fixed; inset:0; z-index:-1; pointer-events:none; background:var(--bg-img); }
+
+/* Encabezado: barra en píldora de vidrio */
+.hd{ background:transparent; color:var(--ink); padding:calc(env(safe-area-inset-top,0px) + 12px) 12px 6px; }
+.hd-row{ background:var(--glass-fill); border:1px solid var(--glass-line); border-radius:999px; padding:6px 10px 6px 6px; min-height:56px; box-shadow:var(--glass-sh); }
+.hd-t{ padding-left:16px; }                 /* sin botón de volver: separado del borde redondeado */
+.hd-row > .ib + .hd-t{ padding-left:4px; }  /* con botón de volver: junto al botón */
+.hd-t p{ color:var(--muted); }
+.hd .ib{ border-radius:50%; background:var(--tint-info); color:var(--ink); }
+.hd-badge{ background:var(--tint-info); color:var(--ink); }
+.hd-badge.demo{ background:#FFC38F; color:#3A1600; }
+.sheet{ margin-top:8px; background:transparent; border-radius:0; padding-top:12px; }
+@media (min-width:680px){ .sheet{ border-radius:0; } }
+
+/* Medidor dentro de su panel */
+.gauge-wrap{ background:var(--glass-fill); border:1px solid var(--glass-line); border-radius:28px; padding:16px 14px 18px; margin-top:12px; box-shadow:var(--glass-sh); }
+.gauge .trk{ stroke:var(--line); }
+.gauge .tk{ fill:var(--muted); }
+.gauge .pm{ stroke:var(--ink); }
+.gauge .pml{ fill:var(--ink); }
+.gauge .ndl{ stroke:var(--ink); }
+.gauge .hub{ fill:var(--ink); }
+.big-sub{ color:var(--muted); }
+.big-sub .d{ color:var(--t-mid); }
+
+/* Paneles translúcidos */
+.card, .rows, details.acc, .seg, .opt, .note, .search{ box-shadow:var(--glass-sh); }
+.card, .rows, details.acc{ border-radius:24px; border-color:var(--glass-line); }
+.kgrid .card{ border-radius:22px; }
+.card.save{ background:linear-gradient(145deg,#2E9C88 0%,#1A5E54 100%); border-color:rgba(255,255,255,.18); color:#fff; }
+.card.save .k-l, .card.save .k-s{ color:rgba(255,255,255,.88); }
+.note{ border-radius:16px; }
+.opt{ border-radius:18px; border-color:var(--glass-line); }
+.seg{ border-radius:999px; border-color:var(--glass-line); }
+.seg-b{ border-radius:999px; }
+.seg-b[aria-checked="true"], .seg-b[aria-pressed="true"], .pc[aria-pressed="true"]{ background:var(--pill); border-color:var(--pill); color:var(--on-pill); }
+.pc{ background:var(--glass-fill); border-color:var(--glass-line); }
+.row .ri{ border-radius:50%; color:var(--ri-ink); background:var(--tint-info); }
+.ptbar .ib{ border-radius:50%; background:var(--glass-fill); border-color:var(--glass-line); }
+.fi{ border-radius:16px; }
+.search{ border-radius:999px; }
+.mg{ background:transparent; gap:0; }
+.m{ background:transparent; box-shadow:inset 0 -1px 0 var(--line), inset -1px 0 0 var(--line); }
+.ph, .phbig{ background:var(--field); }
+
+/* Botones en píldora: principal de alto contraste, secundario de vidrio */
+.btn{ border-radius:999px; background:var(--glass-fill); border-color:var(--glass-line); }
+.btn.primary{ background:var(--pill); color:var(--on-pill); box-shadow:0 8px 24px rgba(0,0,0,.22); }
+.btn.blue{ background:var(--blue-700); border-color:var(--blue-700); color:#fff; }
+.btn.danger{ border-color:var(--tint-bad); }
+
+/* Gráficos: contornos según el fondo */
+.chart .mp{ stroke:var(--solid); }
+.chart .op{ fill:var(--solid); }
+.chart .sp{ fill:var(--ri-ink); stroke:var(--solid); }
+.trend .tp{ stroke:var(--solid); }
+
+/* Navegación flotante en píldora (celular) */
+.nav{ left:50%; right:auto; bottom:calc(12px + env(safe-area-inset-bottom,0px)); transform:translateX(-50%);
+  width:min(calc(100% - 24px),460px); height:var(--nav-h); padding:6px; gap:4px; border:1px solid var(--glass-line); border-radius:999px;
+  background:var(--nav-bg); -webkit-backdrop-filter:blur(22px) saturate(150%); backdrop-filter:blur(22px) saturate(150%); box-shadow:0 12px 36px rgba(0,0,0,.25); }
+.nav button{ height:auto; border:0; border-radius:999px; font-size:11.5px; color:var(--muted); }
+.nav button[aria-current="page"]{ background:var(--pill); color:var(--on-pill); }
+.nav svg{ width:21px; height:21px; }
+
+/* Aviso y diálogo */
+.toast{ background:var(--pill); color:var(--on-pill); border-radius:999px; bottom:calc(var(--nav-h) + 26px + env(safe-area-inset-bottom,0px)); }
+.modal{ background:rgba(0,0,0,.45); }
+.mbox{ background:var(--mbox-bg); border-color:var(--glass-line); border-radius:26px;
+  -webkit-backdrop-filter:blur(24px) saturate(140%); backdrop-filter:blur(24px) saturate(140%); box-shadow:0 20px 50px rgba(0,0,0,.35); }
+
+@media (min-width:960px){
+  :root{ --rail:104px; }
+  body{ padding-bottom:0; }
+  /* Barra lateral flotante con iconos redondos */
+  .nav{ left:16px; top:16px; bottom:auto; transform:none; width:84px; height:auto; padding:8px; gap:6px;
+    border-radius:42px; border-right:1px solid var(--glass-line); grid-template-columns:1fr; grid-auto-rows:66px; }
+  .nav button{ height:66px; border:0; border-radius:33px; font-size:10.5px; padding:6px 0 4px; }
+  .hd{ padding:20px 32px 6px; }
+  .sheet{ width:calc(100% - 48px); padding:16px 32px 40px; border-radius:0; }
+  .toast{ bottom:24px; }
+}
+@media (hover:hover) and (pointer:fine){
+  .btn:hover, .row:hover, .opt:hover, .pc:hover, .seg-b:hover, .hrow .hmain:hover, details.acc > summary:hover{ background-color:var(--hover); }
+  .btn.primary:hover, .seg-b[aria-checked="true"]:hover, .pc[aria-pressed="true"]:hover{ background-color:var(--pill-hover); }
+  .btn.blue:hover{ background-color:var(--blue-900); }
+  .nav button:hover{ color:var(--ink); background-color:var(--hover); }
+  .nav button[aria-current="page"]:hover{ color:var(--on-pill); background-color:var(--pill-hover); }
+  .hd .ib:hover, .ptbar .ib:hover:not([disabled]){ background-color:var(--hover); }
+}
+/* Prolijidad: todo el contenido dentro de su panel y alineado con el texto del panel */
+.card.chk{ padding:14px 16px; align-items:center; }                   /* «Mantener la pantalla encendida» */
+.card.chk:first-child{ border-top:1px solid var(--glass-line); }
+details.acc > .tw{ margin:0 8px 8px; }                                 /* tablas desplegables */
+details.acc > .tw th:first-child, details.acc > .tw td:first-child{ padding-left:8px; }
+details.acc > .tw th:last-child, details.acc > .tw td:last-child{ padding-right:8px; }
+.cv .vh{ text-align:left; padding-left:12px; align-self:end; }                       /* encabezados de la curva sobre los números */
+.cv{ row-gap:8px; }
+
+@media print{ body::before{ display:none; } html{ background:#fff; } }

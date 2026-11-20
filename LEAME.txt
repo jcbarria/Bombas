@@ -3,9 +3,10 @@ EFICIENCIA DE BOMBAS - APP INSTALABLE PARA ANDROID (funciona sin conexión)
 
 Contenido de esta carpeta (suba TODOS los archivos y carpetas, sin cambiar los nombres):
   index.html, styles.css, core.js, i18n.js, app.js, sw.js, manifest.webmanifest,
-  icon-192.png, icon-512.png, icon-maskable-512.png
+  icon-192.png, icon-512.png, icon-maskable-512.png, apple-touch-icon.png
   fonts/   (fuentes IBM Plex Sans y Plex Mono, locales; licencia en fonts/OFL.txt)
-No hacen falta para que la app funcione: tests/ (pruebas) y docs/ (capturas).
+No hacen falta para que la app funcione: tests/ (pruebas) y docs/ (capturas y docs/logo: el logo en SVG
+editable y generar_logo.py, que lo vuelve a dibujar).
 
 QUÉ HACE
 --------

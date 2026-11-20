@@ -1,8 +1,8 @@
 // Versión: cambie este número en cada publicación para que los teléfonos que ya instalaron la app reciban la nueva.
-const CACHE = 'bombas-v10';
+const CACHE = 'bombas-v12';
 const ASSETS = [
   './', 'index.html', 'styles.css', 'core.js', 'i18n.js', 'app.js', 'manifest.webmanifest',
-  'icon-192.png', 'icon-512.png', 'icon-maskable-512.png',
+  'icon-192.png', 'icon-512.png', 'icon-maskable-512.png', 'apple-touch-icon.png',
   'fonts/ibm-plex-sans-latin-400-normal.woff2', 'fonts/ibm-plex-sans-latin-500-normal.woff2',
   'fonts/ibm-plex-sans-latin-600-normal.woff2', 'fonts/ibm-plex-sans-latin-700-normal.woff2',
   'fonts/ibm-plex-mono-latin-500-normal.woff2', 'fonts/ibm-plex-mono-latin-600-normal.woff2'
