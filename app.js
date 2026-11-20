@@ -8,6 +8,13 @@ var GAUGE_ZONES = [[0,50,'z-bad'],[50,70,'z-mid'],[70,100,'z-good']];
 var HIST_STATE = { ok:['Bien','Good','Bom'], warn:['Atención','Attention','Atenção'], bad:['Revisar','Check','Revisar'] };
 var HIST_ETA_RULE = { ok:70, warn:50 };   // η ≥ ok → Bien; η ≥ warn → Atención; menor → Revisar
 var HIST_MAX = 60, MAX_POINTS = 8, MAX_CURVE_ROWS = 12;
+// Fotos del equipo: se reducen antes de guardarlas (lado mayor en px y calidad JPEG)
+var MAX_PHOTOS = 8, PHOTO_MAX_PX = 1600, PHOTO_Q = 0.8;
+var PHOTO_MAX_BYTES = 900*1024;          // si el JPEG final pesa más, se baja la calidad
+// Seguridad al cargar fotos: solo estos formatos, verificados por su firma binaria (no por el nombre)
+var PHOTO_IN_TYPES = ['image/jpeg','image/png','image/webp'];
+var PHOTO_IN_EXT = ['jpg','jpeg','jpe','jfif','png','webp'];
+var PHOTO_IN_MAX_MB = 30, PHOTO_IN_MAX_MPX = 120;   // tamaño máximo del archivo y megapíxeles de origen
 
 /* ---------- Almacenamiento local (solo este dispositivo) ---------- */
 var store = {
@@ -24,7 +31,8 @@ function newInst(){ return { Ds:null, Dd:null, dz:0 }; }
 function defaultState(){
   return {
     v:2,
-    meta:{ empresa:'', tag:'', ubic:'', fecha:today(), resp:'' },
+    meta:{ empresa:'', tag:'', ubic:'', fecha:today(), resp:'', lat:null, lng:null, gpsAcc:null, gpsTs:null },
+    photos:[],                                      // [{ id, ts }] · las imágenes viven en IndexedDB (photoDB)
     pump:newPump(),
     inst:newInst(),
     fluid:{ preset:'agua', rho:998, visc:1.0, T:20, Pv:0.023, Patm:1.013, applyVisc:true },
@@ -55,6 +63,7 @@ function normPoints(pts){ return (pts&&pts.length ? pts : [newPoint()]).map(func
 function normalize(s){
   s.points = normPoints(s.points);
   s.pump = merge(newPump(), s.pump);
+  s.photos = (Array.isArray(s.photos) ? s.photos : []).filter(function(p){ return p && p.id; });
   return s;
 }
 store.ok = true;
@@ -82,6 +91,7 @@ function dispVal(path,k){
   var v=getPath(S,path);
   if(v===null||v===undefined||v==='') return '';
   if(k==='txt') return String(v);
+  if(k==='coord') return fmtCoord(v);
   if(UNITS[k]){ var x=fromSI(k,v,S); return isFinite(x)?fmtIn(x):''; }
   return fmtIn(v);
 }
@@ -104,7 +114,9 @@ var ICO = {
   share:'<path d="M12 15V3M7 8l5-5 5 5"/><path d="M5 13v7h14v-7"/>',
   copy:'<rect x="8" y="8" width="12" height="12" rx="2"/><path d="M4 16V4h12"/>',
   save:'<path d="M5 4h11l3 3v13H5z"/><path d="M8 4v5h7V4M8 20v-6h8v6"/>',
-  file:'<path d="M6 3h8l4 4v14H6z"/><path d="M14 3v4h4M9 13h6M9 17h6"/>'
+  file:'<path d="M6 3h8l4 4v14H6z"/><path d="M14 3v4h4M9 13h6M9 17h6"/>',
+  pin:'<path d="M12 21s7-6.2 7-11.5a7 7 0 0 0-14 0C5 14.8 12 21 12 21z"/><circle cx="12" cy="9.5" r="2.5"/>',
+  camera:'<path d="M4 8h3l2-3h6l2 3h3v11H4z"/><circle cx="12" cy="13" r="3.5"/>'
 };
 function ico(n, cls){ return '<svg viewBox="0 0 24 24" aria-hidden="true"'+(cls?' class="'+cls+'"':'')+'>'+ICO[n]+'</svg>'; }
 var IC = {
@@ -201,7 +213,7 @@ function vMeasure(){
     '<button type="button" class="ib" data-act="ptnext" aria-label="'+L3('Punto siguiente','Next point','Próximo ponto')+'"'+(i>=n-1?' disabled':'')+'>'+ico('chev')+'</button>'+
     '<button type="button" class="ib" data-act="addpt" aria-label="'+L3('Agregar punto','Add point','Adicionar ponto')+'">'+ico('plus')+'</button></div>';
   h+='<div class="rows">'+
-    '<button type="button" class="row" data-act="sub" data-v="equip"><span class="ri">'+ico('pump')+'</span><span class="rt"><b>'+L3('Equipo','Equipment','Equipamento')+'</b><span>'+(esc(curTag())||'Sin TAG')+' · '+TIPOS[P.tipo]+' · '+CLASES[P.clase]+'</span></span>'+ico('chev','chev')+'</button>'+
+    '<button type="button" class="row" data-act="sub" data-v="equip"><span class="ri">'+ico('pump')+'</span><span class="rt"><b>'+L3('Equipo','Equipment','Equipamento')+'</b><span>'+(esc(curTag())||'Sin TAG')+' · '+TIPOS[P.tipo]+' · '+CLASES[P.clase]+equipExtras()+'</span></span>'+ico('chev','chev')+'</button>'+
     '<button type="button" class="row" data-act="sub" data-v="fluid"><span class="ri">'+ico('drop')+'</span><span class="rt"><b>'+L3('Fluido','Fluid','Fluido')+'</b><span>'+esc(pr.n)+' · '+f(fromSI('RHO',fl.rho,S),fl.rho>0&&S.units.RHO==='kgm3'?0:3)+' '+esc(unitLabel('RHO'))+' · '+f(fromSI('VISC',fl.visc,S),1)+' '+esc(unitLabel('VISC'))+'</span></span>'+ico('chev','chev')+'</button></div>';
   if(S.pump.clase==='gt300') h+='<div class="note warn">Equipo de más de 300 kW: tome los datos eléctricos del relé de protección o de la subestación, no de los bornes de media tensión.</div>';
   var left=h; h=pointCard(i);
@@ -257,6 +269,8 @@ function vEquip(){
     F('Ubicación / servicio','meta.ubic','txt',{ph:'Sala de bombas – transferencia',cls:'span2'})+
     F('Fecha del ensayo','meta.fecha','txt',{type:'date'})+
     F('Responsable','meta.resp','txt',{ph:'Nombre'})+'</div></section>';
+  h+=gpsCardHTML();
+  h+=photoCardHTML();
   h+='<section class="card"><h3>Tipo de bomba</h3><div class="opts" role="radiogroup" aria-label="Tipo de bomba">'+
     tipos.map(function(t){ return '<button type="button" class="opt" role="radio" aria-checked="'+(P.tipo===t[0])+'" data-act="tipo" data-v="'+t[0]+'">'+IC[t[0]]+'<span><b>'+t[1]+'</b><small>'+t[2]+'</small><small class="api">'+t[3]+'</small></span></button>'; }).join('')+'</div><div class="hint" style="margin-top:8px">'+L3('Servicio de petróleo, petroquímica y gas: norma de referencia API 610 / ISO 13709 (ver Ajustes › Normas de referencia). La designación API es orientativa: confirme el tipo en la hoja de datos.','Oil, petrochemical and gas service: reference standard API 610 / ISO 13709 (see Settings › Reference standards). The API designation is indicative: confirm the type on the data sheet.','Serviço de petróleo, petroquímica e gás: norma de referência API 610 / ISO 13709 (ver Ajustes › Normas de referência). A designação API é orientativa: confirme o tipo na folha de dados.')+'</div>'+
     (P.tipo==='multi'?'<div class="fgrid" style="margin-top:12px">'+F('N.º de etapas','pump.etapas','num',{suf:'etapas',ph:'2'})+'</div>':'')+'</section>';
@@ -302,6 +316,280 @@ function curveCardHTML(){
   if(rows.length<MAX_CURVE_ROWS) h+='<button type="button" class="btn sm block" style="margin-top:10px" data-act="cvadd">'+ico('plus')+L3('Agregar fila','Add row','Adicionar linha')+'</button>';
   return h+'</section>';
 }
+
+/* ===================== UBICACIÓN Y FOTOS (opcionales) ===================== */
+function fmtCoord(v){ var s=String(v); return decSep()===',' ? s.replace('.', ',') : s; }
+function hasGPS(m){ m=m||S.meta; return typeof m.lat==='number' && typeof m.lng==='number' && isFinite(m.lat) && isFinite(m.lng) && Math.abs(m.lat)<=90 && Math.abs(m.lng)<=180 && !(m.lat===0 && m.lng===0); }
+function mapURL(m){ m=m||S.meta; return 'https://www.google.com/maps/search/?api=1&query='+m.lat+','+m.lng; }
+function gpsTxt(m){ m=m||S.meta; return m.lat+', '+m.lng+(m.gpsAcc>0?' (± '+Math.round(m.gpsAcc)+' m)':''); }
+function equipExtras(){
+  var n=(S.photos||[]).length, t='';
+  if(n) t+=' · '+(n===1?L3('1 foto','1 photo','1 foto'):L3(n+' fotos',n+' photos',n+' fotos'));
+  if(hasGPS()) t+=' · GPS';
+  return t;
+}
+function gpsCardHTML(){
+  return '<section class="card" id="gpsCard"><h3><span>'+L3('Ubicación GPS','GPS location','Localização GPS')+'</span><small>'+L3('opcional','optional','opcional')+'</small></h3>'+
+    '<button type="button" class="btn sm block" data-act="gps" id="gpsBtn">'+ico('pin')+L3('Usar mi ubicación actual','Use my current location','Usar minha localização atual')+'</button>'+
+    '<div class="fgrid" style="margin-top:12px">'+
+      F(L3('Latitud','Latitude','Latitude'),'meta.lat','coord',{suf:'°',neg:true,ph:fmtCoord(-34.603722)})+
+      F(L3('Longitud','Longitude','Longitude'),'meta.lng','coord',{suf:'°',neg:true,ph:fmtCoord(-58.381592)})+'</div>'+
+    '<div id="gpsInfo" style="margin-top:10px">'+gpsInfoHTML()+'</div></section>';
+}
+function gpsInfoHTML(){
+  var m=S.meta;
+  if(!hasGPS(m)) return '<p class="hint" style="margin:0">'+L3('Con el GPS del teléfono activado toque el botón (no necesita señal de datos; al aire libre es más preciso) o escriba las coordenadas en grados decimales.',
+    'With the phone’s GPS on, tap the button (no data signal needed; more accurate outdoors) or type the coordinates in decimal degrees.',
+    'Com o GPS do telefone ativado, toque no botão (não precisa de sinal de dados; ao ar livre é mais preciso) ou digite as coordenadas em graus decimais.')+'</p>';
+  var when=m.gpsTs ? new Date(m.gpsTs) : null;
+  var src=m.gpsAcc>0 ? L3('GPS ± ','GPS ± ','GPS ± ')+nInt(m.gpsAcc)+' m'+(when?' · '+fmtDate(when.getFullYear()+'-'+String(when.getMonth()+1).padStart(2,'0')+'-'+String(when.getDate()).padStart(2,'0'))+' '+String(when.getHours()).padStart(2,'0')+':'+String(when.getMinutes()).padStart(2,'0'):'')
+    : L3('Coordenadas ingresadas a mano','Coordinates typed in by hand','Coordenadas digitadas à mão');
+  return '<div class="gpsrow"><span class="hint">'+src+'</span>'+
+    '<a class="btn sm" href="'+esc(mapURL(m))+'" target="_blank" rel="noopener">'+ico('pin')+L3('Ver en el mapa','View on map','Ver no mapa')+'</a>'+
+    '<button type="button" class="btn sm danger" data-act="gpsclear">'+ico('trash')+L3('Quitar','Remove','Remover')+'</button></div>';
+}
+function refreshGPS(full){
+  if(full){ var c=document.getElementById('gpsCard'); if(c){ c.outerHTML=trHTML(gpsCardHTML()); return; } }
+  var el=document.getElementById('gpsInfo'); if(el) el.innerHTML=trHTML(gpsInfoHTML());
+}
+function gpsLocate(){
+  if(!('geolocation' in navigator)){ toast(L3('Este dispositivo no permite obtener la ubicación','This device cannot provide its location','Este dispositivo não permite obter a localização')); return; }
+  var b=document.getElementById('gpsBtn');
+  if(b){ b.disabled=true; b.innerHTML=trHTML(ico('pin')+L3('Buscando ubicación…','Getting location…','Buscando localização…')); }
+  navigator.geolocation.getCurrentPosition(function(pos){
+    var c=pos.coords;
+    S.meta.lat=Number(c.latitude.toFixed(6)); S.meta.lng=Number(c.longitude.toFixed(6));
+    S.meta.gpsAcc=c.accuracy>0?Math.round(c.accuracy):null; S.meta.gpsTs=Date.now();
+    save(); refreshGPS(true);
+    toast(L3('Ubicación guardada','Location saved','Localização salva')+(S.meta.gpsAcc?' (± '+S.meta.gpsAcc+' m)':''));
+  }, function(err){
+    refreshGPS(true);
+    toast(err && err.code===1 ? L3('Permiso de ubicación denegado: habilítelo en el navegador','Location permission denied: allow it in the browser','Permissão de localização negada: habilite-a no navegador')
+      : err && err.code===3 ? L3('El GPS tardó demasiado: pruebe al aire libre','GPS took too long: try outdoors','O GPS demorou demais: tente ao ar livre')
+      : L3('No se pudo obtener la ubicación','Could not get the location','Não foi possível obter a localização'));
+  }, { enableHighAccuracy:true, timeout:30000, maximumAge:60000 });
+}
+
+/* ---- Fotos: imágenes en IndexedDB (localStorage no alcanza); el estado guarda solo los id ---- */
+var photoDB = (function(){
+  var dbp=null;
+  function open(){
+    if(dbp) return dbp;
+    dbp=new Promise(function(res,rej){
+      if(!window.indexedDB){ rej(new Error('no-idb')); return; }
+      var r=indexedDB.open('ebp-photos',1);
+      r.onupgradeneeded=function(){ r.result.createObjectStore('p'); };
+      r.onsuccess=function(){ res(r.result); };
+      r.onerror=function(){ rej(r.error); };
+    });
+    dbp.catch(function(){ dbp=null; });
+    return dbp;
+  }
+  function run(mode, fn){
+    return open().then(function(db){ return new Promise(function(res,rej){
+      var t=db.transaction('p',mode), req=fn(t.objectStore('p'));
+      t.oncomplete=function(){ res(req ? req.result : undefined); };
+      t.onerror=t.onabort=function(){ rej(t.error); };
+    }); });
+  }
+  return {
+    put:function(id,blob){ return run('readwrite',function(s){ return s.put(blob,id); }); },
+    get:function(id){ return run('readonly',function(s){ return s.get(id); }); },
+    del:function(id){ return run('readwrite',function(s){ return s['delete'](id); }); },
+    keys:function(){ return run('readonly',function(s){ return s.getAllKeys(); }); },
+    clear:function(){ return run('readwrite',function(s){ return s.clear(); }); }
+  };
+})();
+var photoURL={};   // id → URL de objeto ya cargada
+// Solo se muestran o exportan blobs JPEG generados por la propia app
+function isOwnJPEG(b){ return !!b && b.type==='image/jpeg'; }
+function photoSrc(id){
+  if(photoURL[id]) return Promise.resolve(photoURL[id]);
+  return photoDB.get(id).then(function(b){ return isOwnJPEG(b) ? (photoURL[id]=URL.createObjectURL(b)) : null; });
+}
+function hydratePhotos(root){
+  (root||document).querySelectorAll('img[data-photo]').forEach(function(img){
+    if(img.getAttribute('src')) return;
+    photoSrc(img.dataset.photo).then(function(u){ if(u) img.src=u; else img.parentNode.classList.add('miss'); }, function(){ img.parentNode.classList.add('miss'); });
+  });
+}
+/* ---- Seguridad de las fotos ----
+   1) Formato permitido: JPEG, PNG o WebP, comprobado por la FIRMA de los primeros bytes (un .exe o .svg
+      renombrado a .jpg se rechaza). La extensión y el tipo declarados también deben estar en la lista.
+   2) Límites de tamaño (MB) y de megapíxeles (evita «bombas» de descompresión).
+   3) Nunca se guarda el archivo original: se dibujan los píxeles en un lienzo y se genera un JPEG nuevo.
+      Así se descarta cualquier contenido oculto y se quitan los metadatos (EXIF, GPS de la cámara, etc.).
+   4) Los nombres de archivo los pone la app (TAG_foto-01.jpg); el nombre original no se usa. */
+function sniffImage(file){
+  return new Promise(function(res){
+    var r=new FileReader();
+    r.onload=function(){
+      var b=new Uint8Array(r.result||new ArrayBuffer(0));
+      if(b.length>=3 && b[0]===0xFF && b[1]===0xD8 && b[2]===0xFF) return res('image/jpeg');
+      if(b.length>=8 && b[0]===0x89 && b[1]===0x50 && b[2]===0x4E && b[3]===0x47 && b[4]===0x0D && b[5]===0x0A && b[6]===0x1A && b[7]===0x0A) return res('image/png');
+      if(b.length>=12 && b[0]===0x52 && b[1]===0x49 && b[2]===0x46 && b[3]===0x46 && b[8]===0x57 && b[9]===0x45 && b[10]===0x42 && b[11]===0x50) return res('image/webp');
+      res(null);
+    };
+    r.onerror=function(){ res(null); };
+    r.readAsArrayBuffer(file.slice(0,16));
+  });
+}
+function photoErr(code){ var e=new Error(code); e.code=code; return e; }
+function checkPhotoFile(file){
+  var name=String(file.name||''), dot=name.lastIndexOf('.'), ext=dot>=0 ? name.slice(dot+1).toLowerCase() : '';
+  if(dot>=0 && PHOTO_IN_EXT.indexOf(ext)<0) return Promise.reject(photoErr('format'));
+  if(file.type && PHOTO_IN_TYPES.indexOf(file.type)<0) return Promise.reject(photoErr('format'));
+  if(!(file.size>0)) return Promise.reject(photoErr('format'));
+  if(file.size>PHOTO_IN_MAX_MB*1024*1024) return Promise.reject(photoErr('size'));
+  return sniffImage(file).then(function(sig){
+    if(!sig) throw photoErr('format');
+    if(file.type && file.type!==sig) throw photoErr('format');   // dice ser una cosa y es otra
+    return sig;
+  });
+}
+function encodeJPEG(c){
+  var qs=[PHOTO_Q,0.7,0.6,0.5];
+  function step(i){
+    return new Promise(function(r){ c.toBlob(r,'image/jpeg',qs[i]); }).then(function(b){
+      if(!isOwnJPEG(b)) throw photoErr('decode');
+      return (b.size<=PHOTO_MAX_BYTES || i===qs.length-1) ? b : step(i+1);
+    });
+  }
+  return step(0);
+}
+function compressImage(file){
+  return checkPhotoFile(file).then(function(){
+    return new Promise(function(res,rej){
+      var u=URL.createObjectURL(file), im=new Image();
+      im.onload=function(){
+        var w=im.naturalWidth, h=im.naturalHeight;
+        if(!(w>0 && h>0) || w*h>PHOTO_IN_MAX_MPX*1e6){ URL.revokeObjectURL(u); rej(photoErr(w>0?'dims':'decode')); return; }
+        var sc=Math.min(1, PHOTO_MAX_PX/Math.max(w,h)), c=document.createElement('canvas');
+        c.width=Math.max(1,Math.round(w*sc)); c.height=Math.max(1,Math.round(h*sc));
+        var ctx=c.getContext('2d'); ctx.fillStyle='#fff'; ctx.fillRect(0,0,c.width,c.height); ctx.drawImage(im,0,0,c.width,c.height);
+        URL.revokeObjectURL(u);
+        encodeJPEG(c).then(res, rej);
+      };
+      im.onerror=function(){ URL.revokeObjectURL(u); rej(photoErr('decode')); };
+      im.src=u;
+    });
+  });
+}
+function photoFileName(k){
+  var base=String(S.meta.tag||'').normalize('NFD').replace(/[̀-ͯ]/g,'').replace(/[^A-Za-z0-9\-]+/g,'_').replace(/^_+|_+$/g,'').slice(0,40) || 'equipo';
+  return base+'_foto-'+String(k+1).padStart(2,'0')+'.jpg';
+}
+function photoCardHTML(){
+  var ph=S.photos||[], h='<section class="card" id="photoCard"><h3><span>'+L3('Fotos del equipo','Equipment photos','Fotos do equipamento')+'</span><small>'+L3('opcional','optional','opcional')+' · '+ph.length+'/'+MAX_PHOTOS+'</small></h3>';
+  if(ph.length) h+='<div class="phgrid">'+ph.map(function(p,k){
+    return '<button type="button" class="ph" data-act="phview" data-id="'+esc(p.id)+'" aria-label="'+L3('Ver foto '+(k+1),'View photo '+(k+1),'Ver foto '+(k+1))+'"><img data-photo="'+esc(p.id)+'" alt=""'+(photoURL[p.id]?' src="'+photoURL[p.id]+'"':'')+'><span class="phn" aria-hidden="true">'+(k+1)+'</span></button>'; }).join('')+'</div>';
+  if(ph.length<MAX_PHOTOS) h+='<label class="btn sm block phadd"'+(ph.length?' style="margin-top:10px"':'')+'>'+ico('camera')+L3('Tomar o elegir fotos','Take or choose photos','Tirar ou escolher fotos')+
+    '<input type="file" accept="'+PHOTO_IN_TYPES.join(',')+'" multiple data-photos="1" class="sr"></label>';
+  h+='<p class="hint">'+L3('Placa de datos, estado general, instalación… Se numeran en el orden en que se agregan (toque una foto para moverla). Solo JPG, PNG o WebP de hasta '+PHOTO_IN_MAX_MB+' MB: la app las verifica, las convierte a un JPEG nuevo de '+PHOTO_MAX_PX+' px como máximo, sin metadatos, y las guarda solo en este teléfono.',
+    'Nameplate, general condition, installation… They are numbered in the order added (tap a photo to move it). JPG, PNG or WebP only, up to '+PHOTO_IN_MAX_MB+' MB: the app checks them, converts them to a new JPEG of at most '+PHOTO_MAX_PX+' px, without metadata, and stores them only on this phone.',
+    'Placa de dados, estado geral, instalação… São numeradas na ordem em que são adicionadas (toque numa foto para movê-la). Só JPG, PNG ou WebP de até '+PHOTO_IN_MAX_MB+' MB: o app as verifica, converte para um JPEG novo de no máximo '+PHOTO_MAX_PX+' px, sem metadados, e as salva só neste telefone.')+
+    (isSys()?' '+L3('Las fotos son del sistema completo.','Photos belong to the whole system.','As fotos são do sistema inteiro.'):'')+'</p>';
+  return h+'</section>';
+}
+function refreshPhotos(){ var c=document.getElementById('photoCard'); if(c){ c.outerHTML=trHTML(photoCardHTML()); hydratePhotos($main); } }
+function addPhotos(files){
+  var list=Array.prototype.slice.call(files||[]);
+  if(!list.length) return;
+  // Mismo orden en que el sistema entrega los archivos; si todos traen fecha, del más antiguo al más nuevo
+  if(list.every(function(f0){ return f0.lastModified>0; })) list.sort(function(a,b){ return a.lastModified-b.lastModified; });
+  var room=MAX_PHOTOS-S.photos.length;
+  if(room<=0){ toast(L3('Máximo '+MAX_PHOTOS+' fotos','Maximum '+MAX_PHOTOS+' photos','Máximo '+MAX_PHOTOS+' fotos')); return; }
+  var extra=list.length>room; list=list.slice(0,room);
+  toast(L3('Procesando fotos…','Processing photos…','Processando fotos…'));
+  var added=0, bad={}, chain=Promise.resolve();
+  list.forEach(function(file){
+    chain=chain.then(function(){
+      return compressImage(file).then(function(b){
+        var id='ph'+Date.now().toString(36)+Math.random().toString(36).slice(2,7);
+        return photoDB.put(id,b).then(function(){ photoURL[id]=URL.createObjectURL(b); S.photos.push({ id:id, ts:Date.now() }); added++; });
+      }).catch(function(e){ var c=(e&&e.code)||'save'; bad[c]=(bad[c]||0)+1; });
+    });
+  });
+  chain.then(function(){
+    save(); refreshPhotos(); renderHeader();
+    var why={ format:L3('formato no permitido (solo JPG, PNG o WebP)','format not allowed (JPG, PNG or WebP only)','formato não permitido (só JPG, PNG ou WebP)'),
+      size:L3('archivo de más de '+PHOTO_IN_MAX_MB+' MB','file over '+PHOTO_IN_MAX_MB+' MB','arquivo acima de '+PHOTO_IN_MAX_MB+' MB'),
+      dims:L3('imagen demasiado grande (más de '+PHOTO_IN_MAX_MPX+' MP)','image too large (over '+PHOTO_IN_MAX_MPX+' MP)','imagem grande demais (mais de '+PHOTO_IN_MAX_MPX+' MP)'),
+      decode:L3('imagen dañada o ilegible','damaged or unreadable image','imagem danificada ou ilegível'),
+      save:L3('no se pudo guardar','could not be saved','não foi possível salvar') };
+    var rej=Object.keys(bad).map(function(c){ return bad[c]+' '+(why[c]||why.save); });
+    var msg = added ? (added===1?L3('Foto agregada','Photo added','Foto adicionada'):L3(added+' fotos agregadas',added+' photos added',added+' fotos adicionadas')) : '';
+    if(rej.length) msg=(msg?msg+' · ':'')+L3('Rechazadas: ','Rejected: ','Rejeitadas: ')+rej.join(', ');
+    if(extra) msg+=' · '+L3('se alcanzó el máximo','maximum reached','máximo atingido');
+    toast(msg);
+  });
+}
+function movePhoto(id, d){
+  var k=S.photos.findIndex(function(p){ return p.id===id; }), j=k+d;
+  if(k<0 || j<0 || j>=S.photos.length) return;
+  var t=S.photos[k]; S.photos[k]=S.photos[j]; S.photos[j]=t;
+  save(); refreshPhotos(); viewPhoto(id);
+}
+// Fotos como archivos para compartir, en orden y con nombres puestos por la app
+function sharePhotoFiles(){
+  return Promise.all((S.photos||[]).map(function(p){ return photoDB.get(p.id).catch(function(){ return null; }); })).then(function(bs){
+    var out=[]; bs.forEach(function(b){ if(isOwnJPEG(b)) out.push(new File([b], photoFileName(out.length), { type:'image/jpeg' })); });
+    return out;
+  });
+}
+function shareReport(){
+  var t=reportText(), title=trHTML(L3('Informe de eficiencia ','Efficiency report ','Relatório de eficiência '))+(S.meta.tag||'');
+  if(!navigator.share){ copyText(t); return; }
+  function run(data){
+    return navigator.share(data).catch(function(e){
+      if(e && e.name==='AbortError') return;
+      // Sin gesto del usuario (la lectura de fotos tardó): se pide un toque más
+      if(e && e.name==='NotAllowedError' && data.files){ openModal(L3('Compartir informe','Share report','Compartilhar relatório'),'<p>'+L3('Las fotos están listas.','Photos are ready.','As fotos estão prontas.')+'</p>',[{t:L3('Cancelar','Cancel','Cancelar')},{t:L3('Compartir','Share','Compartilhar'),cls:'blue',fn:function(){ run(data); }}]); return; }
+      if(data.files) return run({ title:title, text:t });   // la app elegida no acepta archivos: solo texto
+      copyText(t);
+    });
+  }
+  if(!(S.photos||[]).length || !navigator.canShare){ run({ title:title, text:t }); return; }
+  sharePhotoFiles().then(function(files){
+    var data={ title:title, text:t, files:files };
+    if(!files.length || !navigator.canShare(data)){ run({ title:title, text:t }); return; }
+    // Algunas apps (p. ej. WhatsApp) descartan el texto si van fotos: se deja también copiado
+    try{ if(navigator.clipboard && navigator.clipboard.writeText) navigator.clipboard.writeText(t).then(function(){ toast(L3('El texto del informe también quedó copiado','The report text was also copied','O texto do relatório também foi copiado')); }, function(){}); }catch(e){}
+    run(data);
+  }, function(){ run({ title:title, text:t }); });
+}
+function viewPhoto(id){
+  var k=S.photos.findIndex(function(p){ return p.id===id; });
+  openModal(L3('Foto '+(k+1)+' de '+S.photos.length,'Photo '+(k+1)+' of '+S.photos.length,'Foto '+(k+1)+' de '+S.photos.length),
+    '<img class="phbig" data-photo="'+esc(id)+'" alt=""'+(photoURL[id]?' src="'+photoURL[id]+'"':'')+'><p class="hint">'+esc(photoFileName(k))+'</p>',
+    (k>0?[{ t:L3('← Antes','← Earlier','← Antes'), fn:function(){ movePhoto(id,-1); } }]:[]).concat(k<S.photos.length-1?[{ t:L3('Después →','Later →','Depois →'), fn:function(){ movePhoto(id,1); } }]:[]).concat([
+     { t:L3('Eliminar','Delete','Excluir'), cls:'danger', fn:function(){ askConfirm(L3('¿Eliminar esta foto?','Delete this photo?','Excluir esta foto?'), function(){
+        S.photos=S.photos.filter(function(p){ return p.id!==id; }); save(); refreshPhotos(); renderHeader(); photoGC(); toast(L3('Foto eliminada','Photo deleted','Foto excluída')); }); } },
+     { t:L3('Cerrar','Close','Fechar'), cls:'blue' }]));
+  hydratePhotos(document.getElementById('mBody'));
+}
+// Borra de IndexedDB las imágenes que ya no usa la evaluación actual ni ningún registro del historial
+function photoGC(){
+  if(!store.ok) return;   // sin localStorage no se puede saber qué fotos usa el historial
+  var keep={};
+  (S.photos||[]).forEach(function(p){ keep[p.id]=1; });
+  histLoad().forEach(function(e){ ((e.snap&&e.snap.photos)||[]).forEach(function(p){ keep[p.id]=1; }); });
+  photoDB.keys().then(function(ks){ (ks||[]).forEach(function(k){
+    if(keep[k]) return; photoDB.del(k).catch(function(){});
+    if(photoURL[k]){ URL.revokeObjectURL(photoURL[k]); delete photoURL[k]; }
+  }); }).catch(function(){});
+}
+function blobToDataURL(b){ return new Promise(function(res,rej){ if(!b){ res(null); return; } var r=new FileReader(); r.onload=function(){ res(r.result); }; r.onerror=function(){ rej(r.error); }; r.readAsDataURL(b); }); }
+// Sección de fotos del informe HTML. Va DESPUÉS de trHTML: el texto base64 no debe pasar por el traductor.
+function photosReportHTML(){
+  var ph=S.photos||[]; if(!ph.length) return Promise.resolve('');
+  return Promise.all(ph.map(function(p){ return photoDB.get(p.id).then(function(b){ return isOwnJPEG(b) ? blobToDataURL(b) : null; }).catch(function(){ return null; }); })).then(function(urls){
+    var n=0, figs=urls.map(function(u){ if(!u || !/^data:image\/jpeg;base64,[A-Za-z0-9+\/=]+$/.test(u)) return ''; n++; return '<figure><img src="'+u+'" alt="'+trHTML(L3('Foto ','Photo ','Foto '))+n+'"><figcaption>'+trHTML(L3('Foto ','Photo ','Foto '))+n+' · '+esc(photoFileName(n-1))+'</figcaption></figure>'; }).join('');
+    return n ? '<h2 style="font-size:17px;margin:18px 0 4px">'+trHTML(L3('Fotos del equipo','Equipment photos','Fotos do equipamento'))+'</h2><div class="phs">'+figs+'</div>' : '';
+  });
+}
+function gpsReportHTML(){ return hasGPS() ? '<br><b>'+L3('Ubicación GPS','GPS location','Localização GPS')+':</b> <a href="'+esc(mapURL())+'">'+esc(gpsTxt())+'</a>' : ''; }
+function gpsReportLines(){ return hasGPS() ? [L3('Ubicación GPS','GPS location','Localização GPS')+': '+gpsTxt()+' '+mapURL()] : []; }
 
 /* ---- Fluido ---- */
 function viscInfo(){
@@ -1008,9 +1296,9 @@ function sysReportText(){
   syncActive();
   var fl=FLUIDS[S.fluid.preset]||FLUIDS.otro, n=S.sys.pumps.length;
   var L=demoLine().concat([L3('EVALUACIÓN DE EFICIENCIA DE UN SISTEMA DE BOMBAS','PUMP SYSTEM EFFICIENCY EVALUATION','AVALIAÇÃO DE EFICIÊNCIA DE UM SISTEMA DE BOMBAS'),
-    'Empresa: '+(S.meta.empresa||'—'),L3('Sistema','System','Sistema')+'/TAG: '+(S.meta.tag||'—')+'   Fecha del ensayo: '+(fmtDate(S.meta.fecha)||'—'),'Servicio: '+(S.meta.ubic||'—')+'   Responsable: '+(S.meta.resp||'—'),
+    'Empresa: '+(S.meta.empresa||'—'),L3('Sistema','System','Sistema')+'/TAG: '+(S.meta.tag||'—')+'   Fecha del ensayo: '+(fmtDate(S.meta.fecha)||'—'),'Servicio: '+(S.meta.ubic||'—')+'   Responsable: '+(S.meta.resp||'—')].concat(gpsReportLines()).concat([
     L3('Arreglo','Arrangement','Arranjo')+': '+arrName(S.arr)+' · '+L3(n+' bombas',n+' pumps',n+' bombas'),
-    'Fluido: '+fl.n+' · ρ '+f(S.fluid.rho,0)+' kg/m³ · ν '+f(S.fluid.visc,1)+' cSt · T '+f(S.fluid.T,0)+' °C']);
+    'Fluido: '+fl.n+' · ρ '+f(S.fluid.rho,0)+' kg/m³ · ν '+f(S.fluid.visc,1)+' cSt · T '+f(S.fluid.T,0)+' °C']));
   S.points.forEach(function(p,j){
     var R=sysCalc(S,j);
     L.push('', L3('PUNTO ','POINT ','PONTO ')+(j+1)+(R.est?' · '+L3('REPARTO DE CAUDAL ESTIMADO','ESTIMATED FLOW SPLIT','DIVISÃO DE VAZÃO ESTIMADA'):''));
@@ -1036,10 +1324,10 @@ function sysCSV(){
     if(R.complete){ var g=R.g;
       rows.push([L3('grupo','group','grupo'),j+1,'',S.meta.tag||'','',cn(g.Q,2),R.est?L3('sí','yes','sim'):'','','',g.dP!==null?cn(g.dP,3):'',cn(g.H,2),cn(g.Ph,2),cn(g.Pe,2),cn(g.Peje,2),cn(g.eta,2),cn(g.etaG,2),cn(g.Eesp,4),'',stTxt(sysStatus(R))]); }
   });
-  var head=['Empresa',S.meta.empresa,L3('Sistema','System','Sistema')+'/TAG',S.meta.tag,'Fecha del ensayo',fmtDate(S.meta.fecha),L3('Arreglo','Arrangement','Arranjo'),arrName(S.arr),'Fluido',(FLUIDS[S.fluid.preset]||{}).n,'rho kg/m3',cn(S.fluid.rho,1),'visc cSt',cn(S.fluid.visc,2)];
+  var head=['Empresa',S.meta.empresa,L3('Sistema','System','Sistema')+'/TAG',S.meta.tag,'Fecha del ensayo',fmtDate(S.meta.fecha),L3('Arreglo','Arrangement','Arranjo'),arrName(S.arr),'Fluido',(FLUIDS[S.fluid.preset]||{}).n,'rho kg/m3',cn(S.fluid.rho,1),'visc cSt',cn(S.fluid.visc,2)].concat(gpsCSV());
   return csvOut((S.demo?[demoLine()]:[]).concat([head],[[]],rows));
 }
-function sysHTMLReport(){
+function sysHTMLReport(photos){
   syncActive();
   var fl=FLUIDS[S.fluid.preset]||FLUIDS.otro, n=S.sys.pumps.length, body='';
   S.points.forEach(function(p,j){
@@ -1053,10 +1341,10 @@ function sysHTMLReport(){
     if(notes.length) body+='<ul>'+notes.map(function(t){ return '<li>'+esc(t)+'</li>'; }).join('')+'</ul>';
   });
   var html=reportHead(L3('Informe de eficiencia ','Efficiency report ','Relatório de eficiência ')+esc(S.meta.tag))+
-    '<h1>'+L3('Evaluación de eficiencia de un sistema de bombas','Pump system efficiency evaluation','Avaliação de eficiência de um sistema de bombas')+'</h1><div class="m">Método hidráulico–eléctrico in situ</div><p><b>Empresa:</b> '+esc(S.meta.empresa||'—')+' &nbsp; <b>Fecha del ensayo:</b> '+esc(fmtDate(S.meta.fecha)||'—')+'<br><b>'+L3('Sistema','System','Sistema')+'/TAG:</b> '+esc(S.meta.tag||'—')+'<br><b>Servicio:</b> '+esc(S.meta.ubic||'—')+' &nbsp; <b>Responsable:</b> '+esc(S.meta.resp||'—')+'<br><b>'+L3('Arreglo','Arrangement','Arranjo')+':</b> '+arrName(S.arr)+' · '+L3(n+' bombas',n+' pumps',n+' bombas')+'<br><b>Fluido:</b> '+esc(fl.n)+' · ρ '+f(S.fluid.rho,0)+' kg/m³ · ν '+f(S.fluid.visc,1)+' cSt · T '+f(S.fluid.T,0)+' °C</p>'+
+    '<h1>'+L3('Evaluación de eficiencia de un sistema de bombas','Pump system efficiency evaluation','Avaliação de eficiência de um sistema de bombas')+'</h1><div class="m">Método hidráulico–eléctrico in situ</div><p><b>Empresa:</b> '+esc(S.meta.empresa||'—')+' &nbsp; <b>Fecha del ensayo:</b> '+esc(fmtDate(S.meta.fecha)||'—')+'<br><b>'+L3('Sistema','System','Sistema')+'/TAG:</b> '+esc(S.meta.tag||'—')+'<br><b>Servicio:</b> '+esc(S.meta.ubic||'—')+' &nbsp; <b>Responsable:</b> '+esc(S.meta.resp||'—')+gpsReportHTML()+'<br><b>'+L3('Arreglo','Arrangement','Arranjo')+':</b> '+arrName(S.arr)+' · '+L3(n+' bombas',n+' pumps',n+' bombas')+'<br><b>Fluido:</b> '+esc(fl.n)+' · ρ '+f(S.fluid.rho,0)+' kg/m³ · ν '+f(S.fluid.visc,1)+' cSt · T '+f(S.fluid.T,0)+' °C</p>'+
     body+'<p class="m">'+L3('η del grupo = Σ potencia hidráulica / Σ potencia al eje. Energía específica = potencia eléctrica total / caudal del grupo. * = caudal estimado con las curvas.','Group η = Σ hydraulic power / Σ shaft power. Specific energy = total electrical power / group flow. * = flow estimated from the curves.','η do grupo = Σ potência hidráulica / Σ potência no eixo. Energia específica = potência elétrica total / vazão do grupo. * = vazão estimada com as curvas.')+'</p>'+
     '<p class="m">Resultados orientativos; no sustituyen un ensayo de aceptación (ISO 9906, ANSI/HI 40.6) ni los ensayos de API 610 / ISO 13709.</p></body></html>';
-  return trHTML(html);
+  return withPhotos(trHTML(html), photos);
 }
 function sysFormulasHTML(){
   return [[L3('Sistemas: potencia hidráulica por bomba','Systems: hydraulic power per pump','Sistemas: potência hidráulica por bomba'),'Ph = Q [m³/h] · ΔP [bar] / 36  [kW]  (= ρ·g·Q·H '+L3('con Δz = 0 y Ds = Dd','with Δz = 0 and Ds = Dd','com Δz = 0 e Ds = Dd')+')'],
@@ -1112,6 +1400,7 @@ function render(o){
   applyDL();
   var bi=document.getElementById('btnInstall'); if(bi && window.deferredInstall) bi.hidden=false;
   if(key==='measure') updatePointPreview(ui.pt);
+  hydratePhotos($main);
   if(o.top) window.scrollTo(0,0);
 }
 function renderHeader(){ var v=VIEWS[ui.sub||ui.tab](); $hd.innerHTML=trHTML(headerHTML(v.hd)); }
@@ -1131,7 +1420,8 @@ function refreshClassUI(){
 function updateViscPanel(){ var el=document.getElementById('viscPanel'); if(el) el.innerHTML=trHTML(viscPanelHTML()); }
 function afterEdit(path){
   save();
-  if(path.indexOf('meta.')===0 || /^sys\.pumps\.\d+\.tag$/.test(path)) renderHeader();
+  if(path==='meta.lat' || path==='meta.lng'){ S.meta.gpsAcc=null; S.meta.gpsTs=null; refreshGPS(); }
+  else if(path.indexOf('meta.')===0 || /^sys\.pumps\.\d+\.tag$/.test(path)) renderHeader();
   else if(path==='pump.motorKW'){ var kw=S.pump.motorKW; if(kw>0){ var c=kw>300?'gt300':'le300'; if(c!==S.pump.clase){ S.pump.clase=c; refreshClassUI(); toast('Rango de potencia: '+CLASES[c]); } } }
   else if(path.indexOf('points.')===0) updatePointPreview(+path.split('.')[1]);
   else if(path.indexOf('econ.')===0) updateEco();
@@ -1169,6 +1459,7 @@ $main.addEventListener('change', function(e){
   }
   else if(el.dataset.tog){ S.fluid[el.dataset.tog]=el.checked; save(); updateViscPanel(); }
   else if(el.dataset.chk){ S.checks[el.dataset.chk]=el.checked; save(); }
+  else if(el.dataset.photos){ addPhotos(el.files); el.value=''; }
   else if(el.dataset.wake){ wakeWanted=el.checked; setWake(el.checked).then(function(okk){ if(!okk){ wakeWanted=false; el.checked=false; toast('No se pudo mantener la pantalla encendida'); } }); }
 });
 var ACT={
@@ -1191,17 +1482,17 @@ var ACT={
   cvdel:function(el){ S.pump.curve.splice(+el.dataset.i,1); save(); render(); },
   saveHist:function(){ saveToHistory(); },
   copy:function(){ copyText(reportText()); },
-  share:function(){ var t=reportText(); if(navigator.share){ navigator.share({title:trHTML(L3('Informe de eficiencia ','Efficiency report ','Relatório de eficiência '))+(S.meta.tag||''), text:t}).catch(function(e){ if(!e||e.name!=='AbortError') copyText(t); }); } else copyText(t); },
+  share:function(){ shareReport(); },
   install:function(){ var e=window.deferredInstall; if(!e){ toast('Use el menú ⋮ del navegador › Instalar aplicación'); return; } e.prompt(); },
   csv:function(){ saveFile(fname('csv'), buildCSV()); },
-  htmlrep:function(){ saveFile(fname('html'), buildHTMLReport()); },
+  htmlrep:function(){ photosReportHTML().catch(function(){ return ''; }).then(function(ph){ saveFile(fname('html'), buildHTMLReport(ph)); }); },
   theme:function(el){ store.set('ebp:theme', el.dataset.v); applyTheme(); render(); },
   lang:function(el){ setLang(el.dataset.v); },
-  demo:function(){ askConfirm(L3('¿Cargar datos de ejemplo? Reemplazan la evaluación actual (el historial se conserva). Quedan rotulados como «Ejemplo».','Load example data? It replaces the current evaluation (history is kept). It is labelled “Example”.','Carregar dados de exemplo? Substituem a avaliação atual (o histórico é mantido). Ficam marcados como “Exemplo”.'), function(){ loadDemo(); ui.pt=0; ui.sel=0; save(); go('measure'); toast(L3('Datos de ejemplo cargados','Example data loaded','Dados de exemplo carregados')); }); },
-  newEval:function(){ askConfirm('¿Empezar una evaluación nueva? Se conservan unidades, incertidumbres y el historial.', function(){ var keep={units:S.units,unc:S.unc,econ:S.econ,mode:S.mode}; S=normalize(merge(defaultState(),keep)); afterLoad(); ui.pre={}; ui.pt=0; ui.sel=0; save(); go('measure'); toast('Evaluación nueva'); }); },
-  wipe:function(){ askConfirm('¿Borrar todos los datos de este dispositivo, incluido el historial?', function(){ store.set('ebp:hist',[]); S=normalize(defaultState()); afterLoad(); ui.pre={}; ui.pt=0; ui.sel=0; save(); go('measure'); toast('Datos borrados'); }); },
-  hopen:function(el){ var e=histLoad().filter(function(x){ return x.id===el.dataset.id; })[0]; if(!e) return; S=normalize(merge(defaultState(),e.snap)); afterLoad(); ui.pre={}; ui.pt=0; ui.sel=e.sel||0; save(); go('result'); },
-  hdel:function(el){ askConfirm('¿Eliminar esta evaluación del historial?', function(){ store.set('ebp:hist', histLoad().filter(function(x){ return x.id!==el.dataset.id; })); render(); }); },
+  demo:function(){ askConfirm(L3('¿Cargar datos de ejemplo? Reemplazan la evaluación actual (el historial se conserva). Quedan rotulados como «Ejemplo».','Load example data? It replaces the current evaluation (history is kept). It is labelled “Example”.','Carregar dados de exemplo? Substituem a avaliação atual (o histórico é mantido). Ficam marcados como “Exemplo”.'), function(){ loadDemo(); ui.pt=0; ui.sel=0; save(); photoGC(); go('measure'); toast(L3('Datos de ejemplo cargados','Example data loaded','Dados de exemplo carregados')); }); },
+  newEval:function(){ askConfirm('¿Empezar una evaluación nueva? Se conservan unidades, incertidumbres y el historial.', function(){ var keep={units:S.units,unc:S.unc,econ:S.econ,mode:S.mode}; S=normalize(merge(defaultState(),keep)); afterLoad(); ui.pre={}; ui.pt=0; ui.sel=0; save(); photoGC(); go('measure'); toast('Evaluación nueva'); }); },
+  wipe:function(){ askConfirm('¿Borrar todos los datos de este dispositivo, incluido el historial?', function(){ store.set('ebp:hist',[]); S=normalize(defaultState()); afterLoad(); photoDB.clear().catch(function(){}); photoURL={}; ui.pre={}; ui.pt=0; ui.sel=0; save(); go('measure'); toast('Datos borrados'); }); },
+  hopen:function(el){ var e=histLoad().filter(function(x){ return x.id===el.dataset.id; })[0]; if(!e) return; S=normalize(merge(defaultState(),e.snap)); afterLoad(); ui.pre={}; ui.pt=0; ui.sel=e.sel||0; save(); photoGC(); go('result'); },
+  hdel:function(el){ askConfirm('¿Eliminar esta evaluación del historial?', function(){ store.set('ebp:hist', histLoad().filter(function(x){ return x.id!==el.dataset.id; })); photoGC(); render(); }); },
   arr:function(el){ setArr(el.dataset.v); save(); render(); },
   pump:function(el){ setActive(+el.dataset.i); save(); render(); },
   pumpadd:function(){ addPump(); save(); render(); },
@@ -1210,8 +1501,11 @@ var ACT={
   copyp1:function(){ copyP1(); },
   qmode:function(el){ S.sys.qMode=el.dataset.v; save(); render(); },
   pumpedit:function(el){ setActive(+el.dataset.i); ui.pt=Math.min(ui.sel,S.points.length-1); save(); go('measure'); },
-  demoSys:function(){ askConfirm(L3('¿Cargar el ejemplo de 2 bombas en paralelo? Reemplaza la evaluación actual (el historial se conserva). Queda rotulado como «Ejemplo».','Load the 2-pumps-in-parallel example? It replaces the current evaluation (history is kept). It is labelled “Example”.','Carregar o exemplo de 2 bombas em paralelo? Substitui a avaliação atual (o histórico é mantido). Fica marcado como “Exemplo”.'), function(){ loadSysDemo(); ui.pt=0; ui.sel=0; ui.pre={}; save(); go('measure'); toast(L3('Datos de ejemplo cargados','Example data loaded','Dados de exemplo carregados')); }); },
-  htag:function(el){ ui.htag = el.dataset.set ? el.dataset.v : null; render(); }
+  demoSys:function(){ askConfirm(L3('¿Cargar el ejemplo de 2 bombas en paralelo? Reemplaza la evaluación actual (el historial se conserva). Queda rotulado como «Ejemplo».','Load the 2-pumps-in-parallel example? It replaces the current evaluation (history is kept). It is labelled “Example”.','Carregar o exemplo de 2 bombas em paralelo? Substitui a avaliação atual (o histórico é mantido). Fica marcado como “Exemplo”.'), function(){ loadSysDemo(); ui.pt=0; ui.sel=0; ui.pre={}; save(); photoGC(); go('measure'); toast(L3('Datos de ejemplo cargados','Example data loaded','Dados de exemplo carregados')); }); },
+  htag:function(el){ ui.htag = el.dataset.set ? el.dataset.v : null; render(); },
+  gps:function(){ gpsLocate(); },
+  gpsclear:function(){ S.meta.lat=null; S.meta.lng=null; S.meta.gpsAcc=null; S.meta.gpsTs=null; save(); refreshGPS(true); renderHeader(); },
+  phview:function(el){ viewPhoto(el.dataset.id); }
 };
 document.addEventListener('click', function(e){
   var el=e.target.closest('[data-act]'); if(!el || el.disabled) return;
@@ -1243,6 +1537,7 @@ function saveToHistory(){
   var h=histLoad();
   h.unshift(rec);
   store.set('ebp:hist', h.slice(0,HIST_MAX));
+  photoGC();
   toast('Guardado en el historial');
 }
 function histRecord(){
@@ -1259,10 +1554,10 @@ function demoLine(){ return S.demo ? [L3('*** DATOS DE EJEMPLO, NO SON MEDICIONE
 function reportText(){
   if(isSys()) return sysReportText();
   var c=calcAll(S), fl=FLUIDS[S.fluid.preset]||FLUIDS.otro;
-  var L=demoLine().concat(['EVALUACIÓN DE EFICIENCIA DE BOMBA','Empresa: '+(S.meta.empresa||'—'),'Equipo/TAG: '+(S.meta.tag||'—')+'   Fecha del ensayo: '+(fmtDate(S.meta.fecha)||'—'),'Servicio: '+(S.meta.ubic||'—')+'   Responsable: '+(S.meta.resp||'—'),
+  var L=demoLine().concat(['EVALUACIÓN DE EFICIENCIA DE BOMBA','Empresa: '+(S.meta.empresa||'—'),'Equipo/TAG: '+(S.meta.tag||'—')+'   Fecha del ensayo: '+(fmtDate(S.meta.fecha)||'—'),'Servicio: '+(S.meta.ubic||'—')+'   Responsable: '+(S.meta.resp||'—')].concat(gpsReportLines()).concat([
     'Tipo: '+TIPOS[S.pump.tipo]+' · '+CLASES[S.pump.clase]+(S.pump.tipo==='multi'?' · '+(S.pump.etapas||'?')+' etapas':''),
     'Fluido: '+fl.n+' · ρ '+f(S.fluid.rho,0)+' kg/m³ · ν '+f(S.fluid.visc,1)+' cSt · T '+f(S.fluid.T,0)+' °C','',
-    'Pto | Q m³/h | H m | Ph kW | Pe kW | η bomba % | η global % | kWh/m³ | Desv pts | Estado']);
+    'Pto | Q m³/h | H m | Ph kW | Pe kW | η bomba % | η global % | kWh/m³ | Desv pts | Estado']));
   c.pts.forEach(function(r,i){ if(r.ok) L.push((i+1)+' | '+f(r.Q,1)+' | '+f(r.H,1)+' | '+f(r.Ph,1)+' | '+f(r.Pe,1)+' | '+f(r.eta,1)+' | '+f(r.etaG,1)+' | '+f(r.Eesp,3)+' | '+(r.src!=='band'?fsg(r.dev,1):'n/a')+' | '+r.status.t); else L.push((i+1)+' | incompleto'); });
   if(c.good.length) L.push('','Promedio: η bomba '+f(c.etaAvg,1)+' % · η global '+f(c.etaGAvg,1)+' % · '+f(c.eespAvg,3)+' kWh/m³');
   vibText(c).forEach(function(x){ L.push(x); });
@@ -1272,6 +1567,7 @@ function reportText(){
 var DEC=(1.5).toLocaleString().indexOf(',')>=0 ? ',' : '.';
 function cn(v,d){ return (v===null||v===undefined||!isFinite(v)) ? '' : Number(v).toFixed(d).replace('.',DEC); }
 function csvQ(s){ s=String(s===null||s===undefined?'':s); if(/^[=+\-@\t]/.test(s)) s="'"+s; return /[;,"\n]/.test(s)?'"'+s.replace(/"/g,'""')+'"':s; }
+function gpsCSV(){ return hasGPS() ? [L3('Latitud','Latitude','Latitude'),cn(S.meta.lat,6),L3('Longitud','Longitude','Longitude'),cn(S.meta.lng,6)] : []; }
 function csvOut(rows){ var sep = DEC===',' ? ';' : ','; return trHTML('﻿'+(sep===';'?'sep=;\n':'')+rows.map(function(r){ return r.map(csvQ).join(sep); }).join('\n')); }
 function buildCSV(){
   if(isSys()) return sysCSV();
@@ -1283,21 +1579,22 @@ function buildCSV(){
     VIB_LOCS.forEach(function(L){ L[2].forEach(function(d){ row.push(cn(p.vib?p.vib[L[0]+'_'+d]:null,2)); }); });
     row.push(ev.worst?cn(ev.worst.v,2):'', ev.worst?ev.worst.z:'', ev.worst?vibVerdict(ev.worst.z).t:'');
     rows.push(row); });
-  var head=['Empresa',S.meta.empresa,'Equipo/TAG',S.meta.tag,'Fecha del ensayo',fmtDate(S.meta.fecha),'Tipo',TIPOS[S.pump.tipo],'Potencia',CLASES[S.pump.clase],'Fluido',(FLUIDS[S.fluid.preset]||{}).n,'rho kg/m3',cn(S.fluid.rho,1),'visc cSt',cn(S.fluid.visc,2),'ISO 20816-3 grupo',(vibGroup(S)==='g1'?'1':'2'),'cimentacion',(S.pump.fund==='flex'?'flexible':'rigida')];
+  var head=['Empresa',S.meta.empresa,'Equipo/TAG',S.meta.tag,'Fecha del ensayo',fmtDate(S.meta.fecha),'Tipo',TIPOS[S.pump.tipo],'Potencia',CLASES[S.pump.clase],'Fluido',(FLUIDS[S.fluid.preset]||{}).n,'rho kg/m3',cn(S.fluid.rho,1),'visc cSt',cn(S.fluid.visc,2),'ISO 20816-3 grupo',(vibGroup(S)==='g1'?'1':'2'),'cimentacion',(S.pump.fund==='flex'?'flexible':'rigida')].concat(gpsCSV());
   return csvOut((S.demo?[demoLine()]:[]).concat([head],[[]],rows));
 }
-var REPORT_CSS='body{font:15px/1.4 Arial,sans-serif;margin:24px;color:#111}h1{font-size:22px;margin:0 0 4px}table{border-collapse:collapse;width:100%;margin:14px 0}th,td{border:1px solid #999;padding:5px 7px;text-align:right}th{background:#e6ecf0}td:first-child,th:first-child{text-align:left}.m{color:#444;font-size:13px}.demo{border:2px solid #A63D06;color:#A63D06;padding:6px 10px;font-weight:bold}';
+var REPORT_CSS='body{font:15px/1.4 Arial,sans-serif;margin:24px;color:#111}h1{font-size:22px;margin:0 0 4px}table{border-collapse:collapse;width:100%;margin:14px 0}th,td{border:1px solid #999;padding:5px 7px;text-align:right}th{background:#e6ecf0}td:first-child,th:first-child{text-align:left}.m{color:#444;font-size:13px}.demo{border:2px solid #A63D06;color:#A63D06;padding:6px 10px;font-weight:bold}.phs{display:grid;grid-template-columns:repeat(auto-fill,minmax(240px,1fr));gap:12px}figure{margin:0;break-inside:avoid}figure img{width:100%;border:1px solid #999;border-radius:6px}figcaption{font-size:12px;color:#444}';
 function reportHead(title){ return '<!DOCTYPE html><html lang="'+LANG+'"><head><meta charset="utf-8"><title>'+title+'</title><style>'+REPORT_CSS+'</style></head><body>'+(S.demo?'<p class="demo">'+demoLine()[0]+'</p>':''); }
-function buildHTMLReport(){
-  if(isSys()) return sysHTMLReport();
+function withPhotos(html, photos){ return photos ? html.replace('</body>', photos+'</body>') : html; }
+function buildHTMLReport(photos){
+  if(isSys()) return sysHTMLReport(photos);
   var c=calcAll(S), fl=FLUIDS[S.fluid.preset]||FLUIDS.otro;
   var rows=c.pts.map(function(r,i){ return r.ok?'<tr><td>'+(i+1)+'</td><td>'+f(r.Q,1)+'</td><td>'+f(r.H,1)+'</td><td>'+f(r.Ph,1)+'</td><td>'+f(r.Pe,1)+'</td><td><b>'+f(r.eta,1)+'</b></td><td>'+f(r.etaG,1)+'</td><td>'+f(r.Eesp,3)+'</td><td>'+(r.src!=='band'?fsg(r.dev,1):'—')+'</td><td>'+esc(trHTML(r.status.t))+'</td></tr>':''; }).join('');
   var html = reportHead('Informe de eficiencia '+esc(S.meta.tag))+
-    '<h1>Evaluación de eficiencia de bomba</h1><div class="m">Método hidráulico–eléctrico in situ</div><p><b>Empresa:</b> '+esc(S.meta.empresa||'—')+' &nbsp; <b>Fecha del ensayo:</b> '+esc(fmtDate(S.meta.fecha)||'—')+'<br><b>Equipo/TAG:</b> '+esc(S.meta.tag||'—')+'<br><b>Servicio:</b> '+esc(S.meta.ubic||'—')+' &nbsp; <b>Responsable:</b> '+esc(S.meta.resp||'—')+'<br><b>Tipo:</b> '+TIPOS[S.pump.tipo]+' · '+CLASES[S.pump.clase]+'<br><b>Fluido:</b> '+esc(fl.n)+' · ρ '+f(S.fluid.rho,0)+' kg/m³ · ν '+f(S.fluid.visc,1)+' cSt · T '+f(S.fluid.T,0)+' °C</p>'+
+    '<h1>Evaluación de eficiencia de bomba</h1><div class="m">Método hidráulico–eléctrico in situ</div><p><b>Empresa:</b> '+esc(S.meta.empresa||'—')+' &nbsp; <b>Fecha del ensayo:</b> '+esc(fmtDate(S.meta.fecha)||'—')+'<br><b>Equipo/TAG:</b> '+esc(S.meta.tag||'—')+'<br><b>Servicio:</b> '+esc(S.meta.ubic||'—')+' &nbsp; <b>Responsable:</b> '+esc(S.meta.resp||'—')+gpsReportHTML()+'<br><b>Tipo:</b> '+TIPOS[S.pump.tipo]+' · '+CLASES[S.pump.clase]+'<br><b>Fluido:</b> '+esc(fl.n)+' · ρ '+f(S.fluid.rho,0)+' kg/m³ · ν '+f(S.fluid.visc,1)+' cSt · T '+f(S.fluid.T,0)+' °C</p>'+
     '<table><thead><tr><th>Punto</th><th>Q m³/h</th><th>H m</th><th>Ph kW</th><th>Pe kW</th><th>η bomba %</th><th>η global %</th><th>kWh/m³</th><th>Desv. pts</th><th>Estado</th></tr></thead><tbody>'+rows+'</tbody></table>'+
     (c.good.length?'<p><b>Promedio:</b> η bomba '+f(c.etaAvg,1)+' % · η global '+f(c.etaGAvg,1)+' % · '+f(c.eespAvg,3)+' kWh/m³</p>':'')+vibReportHTML(c)+
     '<p class="m">Resultados orientativos; no sustituyen un ensayo de aceptación (ISO 9906, ANSI/HI 40.6) ni los ensayos de API 610 / ISO 13709.</p></body></html>';
-  return trHTML(html);
+  return withPhotos(trHTML(html), photos);
 }
 function blobSave(o){
   return new Promise(function(res,rej){

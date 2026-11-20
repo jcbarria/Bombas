@@ -363,6 +363,19 @@ ul.cl{ margin:4px 0 0; padding-left:20px; } ul.cl li{ margin:5px 0; }
 .mbox textarea{ width:100%; height:220px; border:1px solid var(--field-line); border-radius:12px; background:var(--field); padding:10px; font:14px/1.45 var(--mono); }
 .mbtns{ display:flex; gap:10px; margin-top:14px; justify-content:flex-end; flex-wrap:wrap; }
 
+/* ---------- Ubicación y fotos del equipo ---------- */
+.gpsrow{ display:flex; flex-wrap:wrap; align-items:center; gap:8px; }
+.gpsrow .hint{ flex:1 1 100%; margin:0 2px 2px; }
+.gpsrow .btn{ flex:1 1 0; }
+.phgrid{ display:grid; grid-template-columns:repeat(3,1fr); gap:8px; }
+.ph{ position:relative; aspect-ratio:1 / 1; padding:0; border:1px solid var(--line); border-radius:12px; overflow:hidden; background:var(--bg); cursor:pointer; }
+.ph img{ display:block; width:100%; height:100%; object-fit:cover; }
+.phn{ position:absolute; left:6px; top:6px; min-width:22px; height:22px; padding:0 6px; border-radius:11px; background:rgba(4,12,18,.7); color:#fff; font:600 12px/22px var(--sans); text-align:center; }
+.ph.miss::after{ content:'?'; position:absolute; inset:0; display:flex; align-items:center; justify-content:center; color:var(--muted); font:600 20px var(--sans); }
+.phadd{ position:relative; }
+.phadd:focus-within{ outline:2px solid var(--blue-700); outline-offset:2px; }
+.phbig{ display:block; width:100%; max-height:65vh; object-fit:contain; border-radius:12px; background:var(--bg); }
+
 /* ---------- Movimiento: solo transform y opacity ---------- */
 @keyframes rise{ from{ opacity:0; transform:translateY(8px); } to{ opacity:1; transform:none; } }
 @keyframes needle{ from{ transform:rotate(0deg); } to{ transform:rotate(var(--a,0deg)); } }

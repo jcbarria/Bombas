@@ -14,7 +14,7 @@ QUÉ HACE
     (filas que abren su pantalla) y las lecturas: caudal, presiones, potencia eléctrica (V·I·cos φ o
     kW directos), η del motor, vibración ISO 20816-3 y datos opcionales de la curva.
     Los números aceptan coma o punto decimal.
-  - Equipo: identificación, tipo de bomba, rango de potencia, datos de placa, CURVA DEL FABRICANTE
+  - Equipo: identificación, UBICACIÓN GPS y FOTOS DEL EQUIPO (nuevo, ambas opcionales), tipo de bomba, rango de potencia, datos de placa, CURVA DEL FABRICANTE
     (nuevo, opcional: tabla de caudal, altura y eficiencia con agua) e instalación.
   - Resultado: medidor de eficiencia con la referencia (placa, curva o rango típico), caudal,
     potencia, vibración, ahorro potencial, gráfico de eficiencia vs. caudal (curva del fabricante,
@@ -25,6 +25,25 @@ QUÉ HACE
     incertidumbre, guía de medición, normas, fórmulas, datos de ejemplo y borrado.
   - En computadora o tableta apaisada (pantallas de 960 px o más) la navegación pasa a una barra
     lateral y el contenido se ordena en dos columnas. En el celular se ve igual que antes.
+
+UBICACIÓN Y FOTOS (nuevo, opcionales)
+-------------------------------------
+  - Medir › Equipo › «Ubicación GPS»: botón «Usar mi ubicación actual» (usa el GPS del teléfono, no
+    necesita señal de datos; la primera vez el navegador pide permiso) o escriba latitud y longitud.
+    «Ver en el mapa» abre Google Maps (eso sí necesita internet). La ubicación sale en el resumen,
+    el CSV y el informe.
+  - Medir › Equipo › «Fotos del equipo»: hasta 8 fotos (cámara o galería), numeradas en orden. Toque
+    una miniatura para verla, moverla (← Antes / Después →) o eliminarla.
+  - Seguridad de las fotos: solo se aceptan JPG, PNG o WebP de hasta 30 MB y 120 megapíxeles. El
+    formato se comprueba por la firma interna del archivo, no por el nombre: un programa, SVG o HTML
+    renombrado a .jpg se rechaza. Nunca se guarda el archivo original: la app genera un JPEG nuevo de
+    1600 px como máximo (menos de ~900 KB), sin metadatos, con nombre propio: TAG_foto-01.jpg, ...
+    Se guardan solo en el teléfono (IndexedDB).
+  - «Compartir informe» envía el texto y las fotos en orden. Si la app elegida no acepta fotos, se
+    envía solo el texto. Como WhatsApp a veces descarta el texto cuando van fotos, el texto también
+    queda copiado para pegarlo. «Descargar informe» incluye las fotos dentro del archivo.
+  - Las evaluaciones del historial conservan sus fotos. Al borrar un registro o «Borrar todo» se
+    liberan las fotos que ya no usa nadie.
 
 SISTEMAS DE 2 A 8 BOMBAS (nuevo)
 --------------------------------
